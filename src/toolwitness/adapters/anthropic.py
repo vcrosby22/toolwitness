@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -22,6 +23,7 @@ from toolwitness.core.classifier import classify
 from toolwitness.core.monitor import ExecutionMonitor
 from toolwitness.core.receipt import verify_receipt
 from toolwitness.core.types import Classification, VerificationResult
+from toolwitness.storage.base import StorageBackend
 
 logger = logging.getLogger("toolwitness")
 
@@ -47,10 +49,19 @@ class AnthropicMonitor:
     tool_result blocks, recording receipts and enabling verification.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        storage: StorageBackend | None = None,
+        session_id: str | None = None,
+    ) -> None:
         self._monitor = ExecutionMonitor()
         self._pending_tool_uses: list[ToolUseRecord] = []
         self._tool_functions: dict[str, Callable[..., Any]] = {}
+        self._storage = storage
+        self._session_id = session_id or uuid.uuid4().hex[:16]
+
+        if self._storage:
+            self._storage.save_session(self._session_id, {"adapter": "anthropic"})
 
     @property
     def monitor(self) -> ExecutionMonitor:
@@ -121,6 +132,7 @@ class AnthropicMonitor:
                 "tool_use_id": tu.tool_use_id,
                 "content": content,
             })
+            self._persist_execution(tu.name)
 
         self._pending_tool_uses = []
         return result_blocks
@@ -157,8 +169,27 @@ class AnthropicMonitor:
                 receipt_valid=receipt_valid,
             )
             results.append(result)
+            self._persist_verification(result)
 
         return results
+
+    def _persist_execution(self, tool_name: str) -> None:
+        if not self._storage:
+            return
+        execution = self._monitor.get_latest_execution(tool_name)
+        if execution:
+            try:
+                self._storage.save_execution(self._session_id, execution)
+            except Exception:
+                logger.exception("Failed to persist execution")
+
+    def _persist_verification(self, result: VerificationResult) -> None:
+        if not self._storage:
+            return
+        try:
+            self._storage.save_verification(self._session_id, result)
+        except Exception:
+            logger.exception("Failed to persist verification")
 
     def get_failures(
         self, agent_response: str
@@ -170,10 +201,19 @@ class AnthropicMonitor:
         ]
 
 
-def wrap(client: Any) -> Any:
+def wrap(
+    client: Any,
+    storage: StorageBackend | None = None,
+    session_id: str | None = None,
+) -> Any:
     """Wrap an Anthropic client with ToolWitness monitoring.
 
     Returns the same client with a `.toolwitness` attribute attached.
+
+    Args:
+        client: An Anthropic client instance.
+        storage: Optional storage backend for persistence.
+        session_id: Optional session identifier.
 
     Usage::
 
@@ -182,20 +222,11 @@ def wrap(client: Any) -> Any:
 
         client = wrap(Anthropic())
 
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            messages=messages,
-            tools=tools,
-        )
-
-        # Extract and execute tool uses with monitoring
-        tool_uses = client.toolwitness.extract_tool_uses(response)
-        tool_results = client.toolwitness.execute_tool_uses()
-
-        # After the next response, verify it
-        results = client.toolwitness.verify(final_response_text)
+        # With persistence:
+        from toolwitness.storage.sqlite import SQLiteStorage
+        client = wrap(Anthropic(), storage=SQLiteStorage())
     """
-    monitor = AnthropicMonitor()
+    monitor = AnthropicMonitor(storage=storage, session_id=session_id)
     client.toolwitness = monitor  # type: ignore[attr-defined]
     return client
 

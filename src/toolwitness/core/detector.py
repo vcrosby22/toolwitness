@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
+import uuid
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -16,6 +17,7 @@ from toolwitness.core.classifier import classify
 from toolwitness.core.monitor import ExecutionMonitor
 from toolwitness.core.receipt import verify_receipt
 from toolwitness.core.types import ToolExecution, VerificationResult
+from toolwitness.storage.base import StorageBackend
 
 logger = logging.getLogger("toolwitness")
 
@@ -35,12 +37,27 @@ class ToolWitnessDetector:
 
         result = detector.execute("get_weather", {"city": "Miami"})
         verification = detector.verify("The weather in Miami is 72°F.")
+
+    With persistence::
+
+        from toolwitness.storage.sqlite import SQLiteStorage
+        detector = ToolWitnessDetector(storage=SQLiteStorage())
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        storage: StorageBackend | None = None,
+        session_id: str | None = None,
+    ):
         self._config = config or {}
         self._monitor = ExecutionMonitor()
         self._tool_schemas: dict[str, dict[str, Any] | None] = {}
+        self._storage = storage
+        self._session_id = session_id or uuid.uuid4().hex[:16]
+
+        if self._storage:
+            self._storage.save_session(self._session_id, {})
 
     @property
     def monitor(self) -> ExecutionMonitor:
@@ -85,8 +102,10 @@ class ToolWitnessDetector:
         """Execute a monitored tool and return its output.
 
         The execution receipt is generated and stored internally.
+        If storage is configured, the execution is persisted.
         """
         output, _receipt = await self._monitor.execute(tool_name, args, tool_fn)
+        self._persist_execution(tool_name)
         return output
 
     def execute_sync(
@@ -97,6 +116,7 @@ class ToolWitnessDetector:
     ) -> Any:
         """Synchronous version of execute()."""
         output, _receipt = self._monitor.execute_sync(tool_name, args, tool_fn)
+        self._persist_execution(tool_name)
         return output
 
     async def verify(self, agent_response: str) -> list[VerificationResult]:
@@ -129,8 +149,37 @@ class ToolWitnessDetector:
                 receipt_valid=receipt_valid,
             )
             results.append(result)
+            self._persist_verification(result)
 
         return results
+
+    def _persist_execution(self, tool_name: str) -> None:
+        """Save the latest execution to storage if configured."""
+        if not self._storage:
+            return
+        execution = self._monitor.get_latest_execution(tool_name)
+        if execution:
+            try:
+                self._storage.save_execution(self._session_id, execution)
+            except Exception:
+                logger.exception("Failed to persist execution — continuing")
+
+    def _persist_verification(self, result: VerificationResult) -> None:
+        """Save a verification result to storage if configured."""
+        if not self._storage:
+            return
+        try:
+            self._storage.save_verification(self._session_id, result)
+        except Exception:
+            logger.exception("Failed to persist verification — continuing")
+
+    @property
+    def session_id(self) -> str:
+        return self._session_id
+
+    @property
+    def storage(self) -> StorageBackend | None:
+        return self._storage
 
     def get_execution(self, tool_name: str) -> ToolExecution | None:
         """Get the latest execution for a tool."""

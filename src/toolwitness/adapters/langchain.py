@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -27,6 +28,7 @@ from toolwitness.core.classifier import classify
 from toolwitness.core.monitor import ExecutionMonitor
 from toolwitness.core.receipt import verify_receipt
 from toolwitness.core.types import Classification, VerificationResult
+from toolwitness.storage.base import StorageBackend
 
 logger = logging.getLogger("toolwitness")
 
@@ -44,6 +46,8 @@ class ToolWitnessMiddleware:
         on_fabrication: str = "log",
         confidence_threshold: float = 0.7,
         on_failure_callback: Callable[[VerificationResult], None] | None = None,
+        storage: StorageBackend | None = None,
+        session_id: str | None = None,
     ):
         """Initialize the middleware.
 
@@ -51,6 +55,8 @@ class ToolWitnessMiddleware:
             on_fabrication: Action on detection — "log", "raise", or "callback".
             confidence_threshold: Minimum confidence to trigger action.
             on_failure_callback: Custom callback for "callback" mode.
+            storage: Optional storage backend for persistence.
+            session_id: Optional session identifier.
         """
         if on_fabrication not in ("log", "raise", "callback"):
             raise ValueError(
@@ -65,6 +71,11 @@ class ToolWitnessMiddleware:
         self._results: list[VerificationResult] = []
         self._current_tool: str | None = None
         self._current_args: dict[str, Any] = {}
+        self._storage = storage
+        self._session_id = session_id or uuid.uuid4().hex[:16]
+
+        if self._storage:
+            self._storage.save_session(self._session_id, {"adapter": "langchain"})
 
     @property
     def monitor(self) -> ExecutionMonitor:
@@ -104,6 +115,7 @@ class ToolWitnessMiddleware:
         self._monitor.execute_sync(
             tool_name, args, lambda **kw: parsed_output
         )
+        self._persist_execution(tool_name)
 
         self._current_tool = None
         self._current_args = {}
@@ -135,12 +147,31 @@ class ToolWitnessMiddleware:
                 receipt_valid=receipt_valid,
             )
             results.append(result)
+            self._persist_verification(result)
 
             if self._should_act(result):
                 self._handle_failure(result)
 
         self._results = results
         return results
+
+    def _persist_execution(self, tool_name: str) -> None:
+        if not self._storage:
+            return
+        execution = self._monitor.get_latest_execution(tool_name)
+        if execution:
+            try:
+                self._storage.save_execution(self._session_id, execution)
+            except Exception:
+                logger.exception("Failed to persist execution")
+
+    def _persist_verification(self, result: VerificationResult) -> None:
+        if not self._storage:
+            return
+        try:
+            self._storage.save_verification(self._session_id, result)
+        except Exception:
+            logger.exception("Failed to persist verification")
 
     def get_results(self) -> list[VerificationResult]:
         """Get the most recent verification results."""

@@ -19,3 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite storage backend
 - Configuration system (env > YAML > defaults)
 - Layer 1 test suite with fabrication fixtures
+- OpenAI adapter: `wrap(client)` with tool-call interception
+- Anthropic adapter: `wrap(client)` hooking tool_use/tool_result blocks
+- LangChain middleware: `ToolWitnessMiddleware` callback handler with log/raise/callback modes
+- Click CLI: `check`, `stats`, `watch`, `report`, `init`, `export` commands
+- Example scripts for OpenAI, Anthropic, and LangChain integration
+- Structured YAML backlog with searchable HTML report generator
+- Storage persistence wiring: detector and all adapters auto-persist executions and verifications to SQLite when storage is provided
+- End-to-end integration tests covering full flow through SQLite
