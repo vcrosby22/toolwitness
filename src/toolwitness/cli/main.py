@@ -61,9 +61,23 @@ def cli(ctx: click.Context) -> None:
     ]),
     help="Filter by classification.",
 )
+@click.option(
+    "--fail-if", "fail_condition", default=None,
+    help='Exit 1 if condition met (e.g. "failure_rate > 0.05").',
+)
 @click.pass_context
-def check(ctx: click.Context, last: int, classification: str | None) -> None:
-    """Show recent verification results."""
+def check(
+    ctx: click.Context,
+    last: int,
+    classification: str | None,
+    fail_condition: str | None,
+) -> None:
+    """Show recent verification results.
+
+    Use --fail-if for CI gates::
+
+        toolwitness check --fail-if "failure_rate > 0.05"
+    """
     config = ctx.obj["config"]
     storage = _open_storage(config)
     if storage is None:
@@ -89,6 +103,14 @@ def check(ctx: click.Context, last: int, classification: str | None) -> None:
             f"{tool:30s} "
             f"confidence={confidence:.2f}"
         )
+
+    if fail_condition and _evaluate_fail_condition(fail_condition, results):
+            click.echo(
+                click.style(
+                    f"\nCI gate FAILED: {fail_condition}", fg="red", bold=True,
+                )
+            )
+            raise SystemExit(1)
 
 
 @cli.command()
@@ -287,6 +309,72 @@ def export_cmd(
         click.echo(f"Exported {len(results)} records to {output}")
     else:
         click.echo(data)
+
+
+def _evaluate_fail_condition(
+    condition: str, results: list[dict[str, Any]],
+) -> bool:
+    """Evaluate a CI gate condition against verification results.
+
+    Supported conditions:
+    - "failure_rate > 0.05"
+    - "fabricated_count > 0"
+    - "skipped_count > 0"
+    """
+    total = len(results)
+    if total == 0:
+        return False
+
+    failures = sum(
+        1 for r in results
+        if r["classification"] in ("fabricated", "skipped")
+    )
+    fabricated_count = sum(
+        1 for r in results if r["classification"] == "fabricated"
+    )
+    skipped_count = sum(
+        1 for r in results if r["classification"] == "skipped"
+    )
+    failure_rate = failures / total
+
+    variables = {
+        "failure_rate": failure_rate,
+        "fabricated_count": fabricated_count,
+        "skipped_count": skipped_count,
+        "total": total,
+        "failures": failures,
+    }
+
+    for op in (">", ">=", "<", "<=", "==", "!="):
+        if op in condition:
+            parts = condition.split(op, 1)
+            if len(parts) != 2:
+                continue
+            var_name = parts[0].strip()
+            threshold = parts[1].strip()
+
+            if var_name not in variables:
+                click.echo(f"Unknown variable: {var_name}")
+                return False
+
+            try:
+                val = variables[var_name]
+                thresh = float(threshold)
+                ops = {
+                    ">": val > thresh,
+                    ">=": val >= thresh,
+                    "<": val < thresh,
+                    "<=": val <= thresh,
+                    "==": val == thresh,
+                    "!=": val != thresh,
+                }
+                return ops[op]
+            except (ValueError, KeyError):
+                click.echo(f"Invalid threshold: {threshold}")
+                return False
+
+    click.echo(f"Cannot parse condition: {condition}")
+    return False
 
 
 def _open_storage(
