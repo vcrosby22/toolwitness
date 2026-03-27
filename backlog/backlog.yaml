@@ -1,0 +1,660 @@
+# ToolWitness Product Backlog
+# Hierarchy: Epic > Story > Task | Bug
+# Relationships: parent (hierarchy), related (cross-references)
+# Priority: P0 (critical) | P1 (high) | P2 (medium) | P3 (low)
+# Status: open | in_progress | done | blocked | deferred
+#
+# Run: python scripts/backlog_report.py
+# Output: backlog/report.html
+
+# ──────────────────────────────────────────────────
+# EPICS
+# ──────────────────────────────────────────────────
+
+- id: EP-01
+  type: epic
+  title: Core Detection Engine
+  description: >
+    HMAC receipt generation, structural matching, schema conformance,
+    and classification engine. The foundation everything else builds on.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [core, detection, receipts, classification]
+
+- id: EP-02
+  type: epic
+  title: Framework Adapters
+  description: >
+    Drop-in adapters for OpenAI, Anthropic, LangChain, MCP, and CrewAI
+    so users add monitoring with 1-2 lines of code.
+  priority: P0
+  status: open
+  milestone: Week 2
+  tags: [adapters, openai, anthropic, langchain, mcp, crewai]
+
+- id: EP-03
+  type: epic
+  title: CLI & Reporting
+  description: >
+    Command-line interface (toolwitness check, watch, stats, report)
+    and static HTML report generation.
+  priority: P1
+  status: open
+  milestone: Week 2
+  tags: [cli, reporting, html]
+
+- id: EP-04
+  type: epic
+  title: Alerting & Notifications
+  description: >
+    Webhook alerts, Slack integration, configurable alert rules
+    (per-classification, session-level failure rate).
+  priority: P1
+  status: open
+  milestone: Week 3
+  tags: [alerting, webhooks, slack]
+
+- id: EP-05
+  type: epic
+  title: Advanced Verification
+  description: >
+    Semantic verification (embeddings), NER-based entity detection,
+    multi-turn chain verification, and unit conversion handling.
+    Addresses known structural-matching limitations.
+  priority: P1
+  status: open
+  milestone: Post-MVP
+  tags: [verification, semantic, ner, multi-turn]
+
+- id: EP-06
+  type: epic
+  title: Dashboard & Visualization
+  description: >
+    Local web dashboard (localhost:8321), session timeline with chain
+    visualization, and the hosted multi-user dashboard.
+  priority: P2
+  status: open
+  milestone: Week 4
+  tags: [dashboard, visualization, timeline]
+
+- id: EP-07
+  type: epic
+  title: Launch & Distribution
+  description: >
+    PyPI publish, documentation site, example scripts, launch posts,
+    and community engagement.
+  priority: P1
+  status: open
+  milestone: Week 4
+  tags: [launch, pypi, docs, marketing]
+
+- id: EP-08
+  type: epic
+  title: Remediation & Guidance
+  description: >
+    Static and pattern-based fix suggestions, before/after tracking,
+    one-click prompt fix generation.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  tags: [remediation, fixes, guidance]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-01 Core Detection Engine
+# ──────────────────────────────────────────────────
+
+- id: ST-01
+  type: story
+  parent: EP-01
+  title: HMAC-SHA256 receipt system
+  description: >
+    Generate and verify cryptographic receipts for every tool call.
+    Session keys held only by SDK; model cannot forge.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [receipts, hmac, crypto]
+
+- id: ST-02
+  type: story
+  parent: EP-01
+  title: Structural verification engine
+  description: >
+    JSON structural matching with numeric tolerance, nested dict
+    support, and extra-claim detection.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [verification, structural, json]
+
+- id: ST-03
+  type: story
+  parent: EP-01
+  title: Classification engine with confidence scoring
+  description: >
+    Combine receipt check + structural match into VERIFIED / EMBELLISHED /
+    FABRICATED / SKIPPED / UNMONITORED with confidence 0.0–1.0.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [classifier, confidence]
+
+- id: ST-04
+  type: story
+  parent: EP-01
+  title: ToolWitnessDetector orchestrator
+  description: >
+    Public API with @detector.tool() decorator, execute(), verify().
+    Async-first with sync wrappers.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [api, detector, orchestrator]
+
+- id: ST-05
+  type: story
+  parent: EP-01
+  title: SQLite persistence layer
+  description: >
+    Local SQLite storage with WAL mode, 0600 permissions,
+    auto-schema creation. Stores executions, verifications, sessions.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [storage, sqlite, persistence]
+
+- id: ST-06
+  type: story
+  parent: EP-01
+  title: Configuration system
+  description: >
+    Env vars (TOOLWITNESS_*) > YAML (toolwitness.yaml) > code defaults.
+    All settings configurable at each level.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [config, yaml, env]
+
+- id: ST-07
+  type: story
+  parent: EP-01
+  title: Layer 1 test suite
+  description: >
+    60 tests: fabrication fixtures, receipt round-trips, fail-open
+    behavior, classifier confidence ranges, structural matching.
+  priority: P0
+  status: done
+  milestone: Week 1
+  tags: [tests, fixtures, layer1]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-02 Framework Adapters
+# ──────────────────────────────────────────────────
+
+- id: ST-10
+  type: story
+  parent: EP-02
+  title: OpenAI adapter
+  description: >
+    wrap(client) returns same client type with tool-call interception.
+    Hooks between tool_calls in response and tool role messages.
+    User code changes: 2 lines.
+  priority: P0
+  status: open
+  milestone: Week 2
+  tags: [adapter, openai]
+
+- id: ST-11
+  type: story
+  parent: EP-02
+  title: Anthropic adapter
+  description: >
+    Hooks between tool_use content blocks and tool_result blocks.
+    Same wrap(client) pattern as OpenAI.
+  priority: P0
+  status: open
+  milestone: Week 2
+  tags: [adapter, anthropic]
+
+- id: ST-12
+  type: story
+  parent: EP-02
+  title: LangChain middleware
+  description: >
+    ToolWitnessMiddleware for chains/agents with configurable
+    on_fabrication behavior and confidence threshold.
+  priority: P1
+  status: open
+  milestone: Week 2
+  tags: [adapter, langchain, middleware]
+
+- id: ST-13
+  type: story
+  parent: EP-02
+  title: MCP proxy adapter
+  description: >
+    Intercepts tools/call JSON-RPC messages between MCP Client
+    and Server. Config points client at ToolWitness proxy.
+  priority: P1
+  status: open
+  milestone: Week 3
+  tags: [adapter, mcp, proxy]
+
+- id: ST-14
+  type: story
+  parent: EP-02
+  title: CrewAI adapter
+  description: >
+    @monitored_tool decorator wrapping CrewAI's @tool.
+  priority: P2
+  status: open
+  milestone: Week 3
+  tags: [adapter, crewai]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-03 CLI & Reporting
+# ──────────────────────────────────────────────────
+
+- id: ST-20
+  type: story
+  parent: EP-03
+  title: CLI commands (check, watch, stats, report, init, export)
+  description: >
+    Click-based CLI: toolwitness check --last N, watch (real-time),
+    stats (per-tool rates), report --format html, init, export.
+  priority: P1
+  status: open
+  milestone: Week 2
+  tags: [cli, click]
+
+- id: ST-21
+  type: story
+  parent: EP-03
+  title: Static HTML report generator
+  description: >
+    Self-contained HTML file with session timeline, classification
+    breakdown, failure detail cards.
+  priority: P1
+  status: open
+  milestone: Week 4
+  tags: [report, html, visualization]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-05 Advanced Verification
+# ──────────────────────────────────────────────────
+
+- id: ST-30
+  type: story
+  parent: EP-05
+  title: Semantic verification via embeddings
+  description: >
+    Compare tool output and agent claims using embedding similarity.
+    toolwitness[semantic] for local ONNX model, toolwitness[openai]
+    for API embeddings. Solves unit conversion and summarization gaps.
+  priority: P1
+  status: open
+  milestone: Post-MVP
+  related: [BUG-01, BUG-02]
+  tags: [semantic, embeddings, onnx]
+
+- id: ST-31
+  type: story
+  parent: EP-05
+  title: NER-based entity substitution detection
+  description: >
+    Detect when the agent substitutes key identifiers (e.g. city names)
+    while keeping numeric values correct. Requires lightweight NER or
+    field-importance weighting.
+  priority: P1
+  status: open
+  milestone: Post-MVP
+  related: [BUG-03]
+  tags: [ner, entities, substitution]
+
+- id: ST-32
+  type: story
+  parent: EP-05
+  title: Level 2 multi-turn chain verification
+  description: >
+    When tool B is called, verify its inputs match prior tool A's
+    outputs. Structured-to-structured comparison.
+  priority: P1
+  status: open
+  milestone: Week 3
+  tags: [multi-turn, chain, verification]
+
+- id: ST-33
+  type: story
+  parent: EP-05
+  title: Level 3 cross-turn NL claim tracking
+  description: >
+    Track natural-language claims across conversation turns with
+    confidence decay, advisory mode, and windowing.
+  priority: P2
+  status: deferred
+  milestone: Post-MVP
+  tags: [multi-turn, nl, claims]
+
+- id: ST-34
+  type: story
+  parent: EP-05
+  title: List-aware summarization logic
+  description: >
+    Detect when an agent selectively reports N of M items from a list.
+    Distinguish legitimate summary from fabrication.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  related: [BUG-02]
+  tags: [summarization, lists, structural]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-04 Alerting
+# ──────────────────────────────────────────────────
+
+- id: ST-40
+  type: story
+  parent: EP-04
+  title: Webhook and Slack alerting
+  description: >
+    Generic HTTP webhook + Slack-formatted webhook. Configurable
+    payload (summary vs full). Opt-in only.
+  priority: P1
+  status: open
+  milestone: Week 3
+  tags: [alerting, webhook, slack]
+
+- id: ST-41
+  type: story
+  parent: EP-04
+  title: Configurable alert rules
+  description: >
+    Per-classification rules (e.g. FABRICATED + confidence > 0.8)
+    and session-level rules (failure_rate > 0.15).
+  priority: P1
+  status: open
+  milestone: Week 3
+  tags: [alerting, rules, config]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-06 Dashboard & Visualization
+# ──────────────────────────────────────────────────
+
+- id: ST-50
+  type: story
+  parent: EP-06
+  title: Local web dashboard
+  description: >
+    toolwitness dashboard on localhost:8321. Pages: overview,
+    failure detail, tool analytics, session timeline.
+    Reads from local SQLite.
+  priority: P2
+  status: open
+  milestone: Week 4
+  tags: [dashboard, localhost, web]
+
+- id: ST-51
+  type: story
+  parent: EP-06
+  title: Session timeline with chain visualization
+  description: >
+    Horizontal flow of green/yellow/red nodes with data-flow arrows.
+    Chain breaks immediately visible. The "aha moment."
+  priority: P1
+  status: open
+  milestone: Week 4
+  tags: [timeline, visualization, aha-moment]
+
+- id: ST-52
+  type: story
+  parent: EP-06
+  title: Hosted multi-user dashboard
+  description: >
+    Cloud-hosted version with historical retention, team sharing,
+    and role-based access.
+  priority: P3
+  status: deferred
+  milestone: Post-MVP
+  tags: [dashboard, hosted, saas]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-07 Launch
+# ──────────────────────────────────────────────────
+
+- id: ST-60
+  type: story
+  parent: EP-07
+  title: PyPI publish with extras
+  description: >
+    pip install toolwitness + [openai], [anthropic], [langchain],
+    [mcp], [crewai]. Verify package name availability.
+  priority: P1
+  status: open
+  milestone: Week 4
+  tags: [pypi, publish, packaging]
+
+- id: ST-61
+  type: story
+  parent: EP-07
+  title: Documentation site (MkDocs)
+  description: >
+    Quickstart, trust model, framework adapters, configuration,
+    contributing guide.
+  priority: P1
+  status: open
+  milestone: Week 4
+  tags: [docs, mkdocs, documentation]
+
+- id: ST-62
+  type: story
+  parent: EP-07
+  title: Launch content
+  description: >
+    Dev.to post, Hacker News submission, Twitter/X thread.
+    Positioning: "Stop trusting your agent — get a witness."
+  priority: P2
+  status: open
+  milestone: Week 4
+  tags: [launch, marketing, content]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-08 Remediation
+# ──────────────────────────────────────────────────
+
+- id: ST-70
+  type: story
+  parent: EP-08
+  title: Static fix suggestion cards
+  description: >
+    Per-classification fix tables: SKIPPED → force tool_choice;
+    FABRICATED → strengthen prompt; EMBELLISHED → tighten schema.
+  priority: P2
+  status: open
+  milestone: Week 4
+  tags: [remediation, suggestions, cards]
+
+- id: ST-71
+  type: story
+  parent: EP-08
+  title: Pattern-based remediation
+  description: >
+    "4 skips this week, all on gpt-3.5 — consider routing to gpt-4o."
+    Requires historical analysis across sessions.
+  priority: P3
+  status: deferred
+  milestone: Post-MVP
+  tags: [remediation, patterns, analytics]
+
+- id: ST-72
+  type: story
+  parent: EP-08
+  title: Before/after fix tracking
+  description: >
+    Track failure rates before and after a fix is applied.
+    "Fix reduced fabrications by 60%."
+  priority: P3
+  status: deferred
+  milestone: Post-MVP
+  tags: [remediation, tracking, metrics]
+
+- id: ST-73
+  type: story
+  parent: EP-08
+  title: One-click prompt fix generation
+  description: >
+    Auto-generate prompt modifications to address detected failure patterns.
+  priority: P3
+  status: deferred
+  milestone: Post-MVP
+  tags: [remediation, automation, prompts]
+
+# ──────────────────────────────────────────────────
+# STORIES — Standalone / Cross-cutting
+# ──────────────────────────────────────────────────
+
+- id: ST-80
+  type: story
+  parent: EP-01
+  title: Guardrail / blocking mode
+  description: >
+    Opt-in mode that blocks tool responses classified as FABRICATED
+    above a configurable confidence threshold. MVP is detector-first;
+    blocking deferred to avoid breaking user workflows.
+  priority: P2
+  status: deferred
+  milestone: Post-MVP
+  tags: [guardrail, blocking, safety]
+
+- id: ST-81
+  type: story
+  parent: EP-07
+  title: TWBench public benchmark
+  description: >
+    Public detection benchmark for community comparison.
+    Standardized fabrication scenarios, scoring methodology.
+  priority: P3
+  status: deferred
+  milestone: Post-MVP
+  tags: [benchmark, community, evaluation]
+
+- id: ST-82
+  type: story
+  parent: EP-04
+  title: Enterprise integrations
+  description: >
+    PagerDuty, Datadog, OTLP export for enterprise observability stacks.
+  priority: P3
+  status: deferred
+  milestone: Post-MVP
+  tags: [enterprise, pagerduty, datadog, otlp]
+
+# ──────────────────────────────────────────────────
+# BUGS — Known detection limitations from Week 1 tests
+# ──────────────────────────────────────────────────
+
+- id: BUG-01
+  type: bug
+  parent: EP-05
+  related: [ST-30, ST-02]
+  title: "Unit conversion classified as FABRICATED"
+  description: >
+    When an agent converts 72°F to 22°C, the structural matcher sees
+    the value 22 and cannot match it to 72. Classified as FABRICATED
+    instead of VERIFIED. Requires semantic verification or conversion
+    tables to resolve.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  discovered: "2026-03-27 — Week 1 test suite"
+  fixture: unit_conversion
+  evidence: >
+    structural_match returns mismatched (temp_f=72 not found, 22 present).
+    Classifier scores FABRICATED with confidence 0.68.
+  tags: [bug, false-negative, unit-conversion, structural-limitation]
+
+- id: BUG-02
+  type: bug
+  parent: EP-05
+  related: [ST-30, ST-34, ST-02]
+  title: "List summarization classified as FABRICATED"
+  description: >
+    When an agent reports 2 of 5 list items accurately ("Houston 80°F,
+    Miami 72°F"), the structural matcher sees the 3 unmentioned values
+    as contradictions because other numbers ARE present in the response.
+    Classified as FABRICATED instead of VERIFIED/EMBELLISHED.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  discovered: "2026-03-27 — Week 1 test suite"
+  fixture: summary
+  evidence: >
+    structural_match returns 4 matched, 3 mismatched (55, 68, 45 not found
+    but response contains 80, 72). match_ratio=0.57. Classifier scores
+    FABRICATED with confidence 0.72.
+  tags: [bug, false-negative, summarization, structural-limitation]
+
+- id: BUG-03
+  type: bug
+  parent: EP-05
+  related: [ST-31, ST-02]
+  title: "Entity substitution not detected (wrong city)"
+  description: >
+    When an agent says "NYC" instead of "Miami" but keeps temp and
+    condition correct, structural matching sees match_ratio=1.0 (72 ✓,
+    sunny ✓) and classifies as VERIFIED. "Miami" goes to missing_values
+    but the classifier treats it as selective omission because everything
+    mentioned was correct.
+  priority: P1
+  status: open
+  milestone: Post-MVP
+  discovered: "2026-03-27 — Week 1 test suite"
+  fixture: wrong_city
+  evidence: >
+    structural_match returns matched=2 (temp_f, condition), missing=1 (city).
+    match_ratio=1.0. Classifier scores VERIFIED with confidence 0.99.
+    Requires NER or field-importance weighting to detect substitution.
+  tags: [bug, false-positive, entity-substitution, structural-limitation]
+
+# ──────────────────────────────────────────────────
+# TASKS — Layer 2/3 testing infrastructure
+# ──────────────────────────────────────────────────
+
+- id: TK-01
+  type: task
+  parent: ST-07
+  title: "Layer 2: Provoked fabrication tests with real LLMs"
+  description: >
+    Contradictory tools (Miami blizzard), overloaded context (5-10
+    sequential calls), suggestive prompts. N=20 runs, >=80% detection.
+    CI job: nightly/weekly, budget ~$5-15/week.
+  priority: P1
+  status: open
+  milestone: Week 2
+  tags: [tests, layer2, provocation, llm]
+
+- id: TK-02
+  type: task
+  parent: ST-07
+  title: "Layer 3: Record/replay test infrastructure"
+  description: >
+    Capture real sessions as JSON fixtures. Replay deterministically
+    without LLM calls. Growing corpus of real fabrication examples.
+  priority: P1
+  status: open
+  milestone: Week 2
+  tags: [tests, layer3, record-replay]
+
+- id: TK-03
+  type: task
+  parent: ST-07
+  title: "Layer 4: False-positive corpus and regression gate"
+  description: >
+    Legitimate responses that must NOT be flagged: paraphrasing,
+    summarizing, rounding, unit conversion, selective reporting.
+    Gate: <2% false positive rate or CI fails.
+  priority: P1
+  status: open
+  milestone: Week 3
+  related: [BUG-01, BUG-02, BUG-03]
+  tags: [tests, layer4, false-positives, regression]

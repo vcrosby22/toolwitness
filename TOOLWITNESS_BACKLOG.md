@@ -1,17 +1,28 @@
 # ToolWitness Backlog
 
-Product backlog for the ToolWitness project. Items deferred from MVP are captured here.
+**Canonical source:** [`backlog/backlog.yaml`](backlog/backlog.yaml)
 
-## Post-MVP
+Generate the searchable HTML report:
 
-| ID | Title | Notes |
-|----|-------|-------|
-| TW-01 | Guardrail / blocking mode | Opt-in, high confidence threshold only; MVP is detector-first |
-| TW-02 | Level 3 multi-turn NL claim tracking | Cross-turn verification with confidence decay, advisory mode, windowing |
-| TW-03 | Semantic verification | `toolwitness[semantic]` local ONNX model, `toolwitness[openai]` API embeddings |
-| TW-04 | Hosted dashboard | Multi-user, historical retention, team sharing |
-| TW-05 | Pattern-based remediation | "4 skips this week, all on gpt-3.5 — consider routing to gpt-4o" |
-| TW-06 | Enterprise integrations | PagerDuty, Datadog, OTLP |
-| TW-07 | TWBench public benchmark | Public detection benchmark for community comparison |
-| TW-08 | One-click prompt fix generation | Auto-generate prompt fixes for detected failures |
-| TW-09 | Before/after tracking | "Fix reduced failures by 60%" |
+```bash
+python scripts/backlog_report.py          # → backlog/report.html
+python scripts/backlog_report.py --open   # generate and open in browser
+```
+
+## Hierarchy
+
+- **Epic** — high-level feature area (e.g. "Advanced Verification")
+- **Story** — deliverable piece of value within an epic
+- **Task** — implementation step within a story
+- **Bug** — defect linked to an epic or story
+
+Items have `parent` (hierarchy) and `related` (cross-references) fields.
+Priority scale: P0 (critical) → P3 (low).
+
+## Quick reference — known detection limitations (bugs)
+
+| ID | Title | Parent | Fix via |
+|----|-------|--------|---------|
+| BUG-01 | Unit conversion classified as FABRICATED | EP-05 | ST-30 (semantic verification) |
+| BUG-02 | List summarization classified as FABRICATED | EP-05 | ST-30, ST-34 |
+| BUG-03 | Entity substitution not detected (wrong city) | EP-05 | ST-31 (NER detection) |
