@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from toolwitness.reporting.about_page import generate_about_page
 from toolwitness.reporting.html_report import generate_html_report
 from toolwitness.storage.sqlite import SQLiteStorage
 
@@ -38,6 +39,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         routes: dict[str, Any] = {
             "/": self._page_overview,
+            "/about": self._page_about,
             "/api/verifications": self._api_verifications,
             "/api/stats": self._api_stats,
             "/api/sessions": self._api_sessions,
@@ -59,6 +61,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def _page_overview(self, query: dict[str, list[str]]) -> None:
         self._send_html(_dashboard_page())
+
+    def _page_about(self, query: dict[str, list[str]]) -> None:
+        self._send_html(generate_about_page())
 
     def _page_report(self, query: dict[str, list[str]]) -> None:
         storage = self._open_storage()
@@ -157,6 +162,7 @@ def start_dashboard(
     url = f"http://{host}:{port}"
     print(f"ToolWitness dashboard running at {url}")
     print(f"  Overview:  {url}/")
+    print(f"  About:     {url}/about")
     print(f"  Report:    {url}/report")
     print(f"  API:       {url}/api/verifications")
     print(f"  Health:    {url}/api/health")
@@ -227,6 +233,7 @@ a.report-link:hover { text-decoration: underline; }
     <h1>ToolWitness Dashboard</h1>
     <div style="display:flex;gap:0.75rem;align-items:center">
         <a href="/report" class="report-link">Full Report</a>
+        <a href="/about" class="report-link">About</a>
         <button class="refresh" onclick="loadAll()">Refresh</button>
         <span id="status" class="status status-ok">connected</span>
     </div>

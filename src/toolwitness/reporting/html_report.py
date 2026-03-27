@@ -65,6 +65,7 @@ def generate_html_report(
     <a href="#timeline">Sessions</a>
     <a href="#failures">Failures</a>
     <a href="#tools">Tool Stats</a>
+    <a href="/about">About</a>
 </nav>
 
 <section id="summary">
