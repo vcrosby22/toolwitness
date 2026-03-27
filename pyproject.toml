@@ -27,7 +27,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-dependencies = []
+dependencies = ["click>=8.0"]
 
 [project.optional-dependencies]
 openai = ["openai>=1.0"]
