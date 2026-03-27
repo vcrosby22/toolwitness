@@ -1,0 +1,16 @@
+# ToolWitness configuration
+# Copy to toolwitness.yaml and adjust as needed.
+# Precedence: environment variables (TOOLWITNESS_*) > this file > code defaults.
+
+# storage:
+#   db_path: ~/.toolwitness/toolwitness.db    # TOOLWITNESS_DB_PATH
+
+# log_level: WARNING                          # TOOLWITNESS_LOG_LEVEL
+
+# verification:
+#   confidence_threshold: 0.7                 # Minimum confidence to flag
+#   embellishment_alert: false                # Alert on EMBELLISHED (domain-dependent)
+
+# alerting:
+#   webhook_url: null                         # TOOLWITNESS_WEBHOOK_URL (opt-in)
+#   slack_webhook_url: null                   # TOOLWITNESS_SLACK_WEBHOOK_URL (opt-in)

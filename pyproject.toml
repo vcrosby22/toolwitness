@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "toolwitness"
+dynamic = ["version"]
+description = "Detect when AI agents skip tools or fabricate outputs"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "Victoria Crosby" },
+]
+keywords = ["ai", "agents", "testing", "verification", "tool-calling", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.20"]
+langchain = ["langchain-core>=0.1"]
+mcp = ["mcp>=1.0"]
+crewai = ["crewai>=0.40"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "hypothesis>=6.0",
+    "ruff>=0.4",
+    "coverage>=7.0",
+]
+all = [
+    "toolwitness[openai]",
+    "toolwitness[anthropic]",
+    "toolwitness[langchain]",
+    "toolwitness[mcp]",
+    "toolwitness[crewai]",
+]
+
+[project.scripts]
+toolwitness = "toolwitness.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/vcrosby22/toolwitness"
+Repository = "https://github.com/vcrosby22/toolwitness"
+Issues = "https://github.com/vcrosby22/toolwitness/issues"
+
+[tool.hatch.version]
+path = "src/toolwitness/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/toolwitness"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
