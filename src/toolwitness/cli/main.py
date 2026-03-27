@@ -28,6 +28,7 @@ except ImportError:
 
 from toolwitness._version import __version__
 from toolwitness.config import ToolWitnessConfig
+from toolwitness.reporting.html_report import generate_html_report
 from toolwitness.storage.sqlite import SQLiteStorage
 
 CLASSIFICATION_COLORS = {
@@ -240,7 +241,7 @@ def report(ctx: click.Context, fmt: str, output: str | None) -> None:
             json.dumps(data, indent=2, default=str)
         )
     elif fmt == "html":
-        html_content = _generate_html_report(results, tool_stats)
+        html_content = generate_html_report(results, tool_stats, sessions)
         Path(out_path).write_text(html_content)
 
     click.echo(f"Report generated: {out_path}")
@@ -262,6 +263,33 @@ def init(output: str) -> None:
 
     Path(output).write_text(content)
     click.echo(f"Created {output}")
+
+
+@cli.command()
+@click.option(
+    "--host", default="127.0.0.1", show_default=True,
+    help="Host to bind to.",
+)
+@click.option(
+    "--port", "-p", default=8321, show_default=True,
+    help="Port to listen on.",
+)
+@click.pass_context
+def dashboard(ctx: click.Context, host: str, port: int) -> None:
+    """Start the local web dashboard."""
+    from toolwitness.dashboard.server import start_dashboard
+
+    config = ctx.obj["config"]
+    db_path = Path(config.db_path)
+
+    if not db_path.exists():
+        click.echo(
+            f"No database found at {db_path}. "
+            "Run your agent with ToolWitness first."
+        )
+        return
+
+    start_dashboard(str(db_path), host=host, port=port)
 
 
 @cli.command(name="export")
@@ -409,65 +437,3 @@ def _default_config_yaml() -> str:
 """
 
 
-def _generate_html_report(
-    results: list[dict[str, Any]],
-    tool_stats: dict[str, Any],
-) -> str:
-    total = len(results)
-    failures = sum(
-        1 for r in results
-        if r["classification"] in ("fabricated", "skipped")
-    )
-    rate = failures / total if total else 0
-
-    rows = ""
-    for r in results[:100]:
-        cls = r["classification"]
-        color = {
-            "verified": "#16a34a", "embellished": "#ca8a04",
-            "fabricated": "#dc2626", "skipped": "#dc2626",
-            "unmonitored": "#6b7280",
-        }.get(cls, "#6b7280")
-        rows += (
-            f"<tr>"
-            f"<td>{r.get('tool_name', '')}</td>"
-            f'<td style="color:{color};font-weight:600">'
-            f"{cls.upper()}</td>"
-            f"<td>{r.get('confidence', 0):.2f}</td>"
-            f"<td>{r.get('session_id', '')[:8]}</td>"
-            f"</tr>\n"
-        )
-
-    return f"""<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<title>ToolWitness Report</title>
-<style>
-body {{ font-family: system-ui; background: #0f172a;
-  color: #e2e8f0; padding: 2rem; max-width: 900px; margin: 0 auto; }}
-h1 {{ margin-bottom: 0.5rem; }}
-.stats {{ display: flex; gap: 1rem; margin: 1rem 0; }}
-.stat {{ background: #1e293b; padding: 1rem; border-radius: 8px;
-  border: 1px solid #334155; }}
-.stat-val {{ font-size: 1.5rem; font-weight: 700; }}
-.stat-lbl {{ font-size: 0.75rem; color: #94a3b8; }}
-table {{ width: 100%; border-collapse: collapse; margin-top: 1rem; }}
-th, td {{ text-align: left; padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #334155; }}
-th {{ color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }}
-</style></head><body>
-<h1>ToolWitness Report</h1>
-<p style="color:#94a3b8">Generated {time.strftime("%Y-%m-%d %H:%M")}</p>
-<div class="stats">
-  <div class="stat"><div class="stat-val">{total}</div>
-    <div class="stat-lbl">Verifications</div></div>
-  <div class="stat"><div class="stat-val">{failures}</div>
-    <div class="stat-lbl">Failures</div></div>
-  <div class="stat"><div class="stat-val">{rate:.1%}</div>
-    <div class="stat-lbl">Failure Rate</div></div>
-</div>
-<table>
-<thead><tr><th>Tool</th><th>Classification</th>
-  <th>Confidence</th><th>Session</th></tr></thead>
-<tbody>{rows}</tbody>
-</table>
-</body></html>"""

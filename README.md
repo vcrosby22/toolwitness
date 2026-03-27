@@ -44,26 +44,30 @@ With framework extras:
 pip install toolwitness[openai]      # OpenAI adapter
 pip install toolwitness[anthropic]   # Anthropic adapter
 pip install toolwitness[langchain]   # LangChain middleware
+pip install toolwitness[mcp]         # MCP proxy adapter
+pip install toolwitness[crewai]      # CrewAI @monitored_tool
 ```
 
 ### Basic usage
 
 ```python
 from toolwitness import ToolWitnessDetector
+from toolwitness.storage.sqlite import SQLiteStorage
 
-detector = ToolWitnessDetector()
+# Persist to SQLite so the CLI and dashboard can read data
+detector = ToolWitnessDetector(storage=SQLiteStorage())
 
 @detector.tool()
 def get_weather(city: str) -> dict:
     return {"city": city, "temp_f": 72, "condition": "sunny"}
 
 # Execute a tool (generates a cryptographic receipt)
-result = detector.execute("get_weather", {"city": "Miami"})
+result = detector.execute_sync("get_weather", {"city": "Miami"})
 
-# Later, verify the agent's response against recorded receipts
-verification = detector.verify("The weather in Miami is 72°F and sunny.")
+# Verify the agent's response against recorded receipts
+verification = detector.verify_sync("The weather in Miami is 72°F and sunny.")
 print(verification)
-# VerificationResult(tool_name='get_weather', classification=VERIFIED, confidence=0.95, ...)
+# [VerificationResult(tool_name='get_weather', classification=VERIFIED, confidence=0.95)]
 ```
 
 ### With OpenAI
@@ -71,9 +75,59 @@ print(verification)
 ```python
 from openai import OpenAI
 from toolwitness.adapters.openai import wrap
+from toolwitness.storage.sqlite import SQLiteStorage
 
-client = wrap(OpenAI())  # 1 line to add monitoring
+client = wrap(OpenAI(), storage=SQLiteStorage())
 # Use client normally — ToolWitness intercepts tool calls transparently
+```
+
+### With Anthropic
+
+```python
+from anthropic import Anthropic
+from toolwitness.adapters.anthropic import wrap
+from toolwitness.storage.sqlite import SQLiteStorage
+
+client = wrap(Anthropic(), storage=SQLiteStorage())
+```
+
+### With LangChain
+
+```python
+from toolwitness.adapters.langchain import ToolWitnessMiddleware
+from toolwitness.storage.sqlite import SQLiteStorage
+
+middleware = ToolWitnessMiddleware(
+    on_fabrication="raise",  # or "log" or "callback"
+    storage=SQLiteStorage(),
+)
+# Add middleware as a callback to your LangChain agent
+```
+
+### With MCP (Model Context Protocol)
+
+```python
+from toolwitness.adapters.mcp import MCPMonitor
+
+monitor = MCPMonitor()
+# Intercept tool calls from JSON-RPC messages
+monitor.on_tool_call(params={"name": "get_weather", "arguments": {"city": "Miami"}})
+monitor.on_tool_result(tool_name="get_weather", result={"temp_f": 72})
+results = monitor.verify("Miami is 72°F.")
+```
+
+### With CrewAI
+
+```python
+from toolwitness.adapters.crewai import monitored_tool
+
+@monitored_tool
+def get_weather(city: str) -> str:
+    return '{"city": "Miami", "temp_f": 72}'
+
+# Use with CrewAI agents normally — calls are monitored
+output = get_weather(city="Miami")
+results = get_weather.toolwitness.verify("Miami is 72°F.")
 ```
 
 ## How it works
@@ -82,6 +136,33 @@ client = wrap(OpenAI())  # 1 line to add monitoring
 2. **Execute** — ToolWitness records each tool call with an HMAC-signed receipt (the model cannot forge these)
 3. **Verify** — after the agent responds, ToolWitness compares claims against actual tool outputs
 4. **Classify** — each tool interaction gets a classification (VERIFIED → SKIPPED) with a confidence score
+
+## Alerting
+
+Configure alerts for failures via webhook, Slack, or custom callbacks:
+
+```python
+from toolwitness.alerting.rules import AlertEngine, AlertRule
+from toolwitness.alerting.channels import SlackChannel
+from toolwitness.core.types import Classification
+
+engine = AlertEngine()
+engine.add_rule(AlertRule(
+    classifications={Classification.FABRICATED, Classification.SKIPPED},
+    min_confidence=0.8,
+    channels=[SlackChannel("https://hooks.slack.com/services/...")],
+))
+```
+
+Or via `toolwitness.yaml`:
+
+```yaml
+alerting:
+  slack_webhook_url: "https://hooks.slack.com/services/..."
+  rules:
+    - classifications: [fabricated, skipped]
+      min_confidence: 0.8
+```
 
 ## Configuration
 
@@ -94,11 +175,35 @@ Config precedence: environment variables (`TOOLWITNESS_*`) > YAML (`toolwitness.
 ## CLI
 
 ```bash
-toolwitness check --last 5    # Show recent verification results
-toolwitness stats             # Per-tool failure rates
-toolwitness watch             # Real-time detection log
-toolwitness report --format html  # Static HTML report
+toolwitness check --last 5                              # Recent verification results
+toolwitness check --fail-if "failure_rate > 0.05"       # CI gate — exits 1 on breach
+toolwitness stats                                       # Per-tool failure rates
+toolwitness watch                                       # Real-time detection log
+toolwitness report --format html                        # Self-contained HTML report
+toolwitness dashboard                                   # Local web dashboard
+toolwitness export --format json                        # Structured data export
+toolwitness init                                        # Create config file
 ```
+
+### CI gate
+
+Add to your CI pipeline to fail builds when agents misbehave:
+
+```bash
+toolwitness check --fail-if "failure_rate > 0.05"
+toolwitness check --fail-if "fabricated_count > 0"
+```
+
+## Dashboard
+
+```bash
+toolwitness dashboard  # Starts at http://localhost:8321
+```
+
+The local dashboard reads from SQLite and auto-refreshes every 5 seconds. Pages:
+
+- **Overview** — KPI cards, classification breakdown, recent failures
+- **Full Report** — session timelines, failure detail cards with evidence, remediation suggestions, per-tool stats
 
 ## Design principles
 
@@ -106,6 +211,10 @@ toolwitness report --format html  # Static HTML report
 - **Local-first**: All data stored in local SQLite. No cloud, no accounts, no telemetry by default.
 - **Zero required dependencies**: Core engine uses only Python stdlib. Framework adapters are optional extras.
 - **Async-first**: Native async with thin sync wrappers for compatibility.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and code style.
 
 ## License
 
