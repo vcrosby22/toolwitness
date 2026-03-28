@@ -6,7 +6,8 @@ Usage::
     from toolwitness.adapters.openai import wrap
 
     client = wrap(OpenAI())
-    # Use client normally — ToolWitness intercepts tool calls transparently
+    # wrap() attaches a .toolwitness monitor — use its helpers to
+    # extract, execute, and verify tool calls in your agent loop.
 
 The wrapped client records execution receipts for every tool call and
 verifies agent responses against actual tool outputs.

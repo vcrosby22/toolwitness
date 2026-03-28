@@ -1,4 +1,4 @@
-"""Tests for the alerting system — channels, rules, and engine."""
+"""Tests for the alerting system — channels, rules, engine, and detector integration."""
 
 from toolwitness.alerting.channels import (
     AlertPayload,
@@ -6,6 +6,7 @@ from toolwitness.alerting.channels import (
     LogChannel,
 )
 from toolwitness.alerting.rules import AlertEngine, AlertRule, SessionRule
+from toolwitness.core.detector import ToolWitnessDetector
 from toolwitness.core.types import Classification, VerificationResult
 
 
@@ -150,3 +151,53 @@ class TestAlertEngine:
     def test_from_empty_config_adds_default(self):
         engine = AlertEngine.from_config({})
         assert len(engine._rules) == 1
+
+
+class TestDetectorAlertIntegration:
+    """Verify that ToolWitnessDetector fires alerts automatically."""
+
+    def _make_detector_with_tool(self, alert_engine=None):
+        detector = ToolWitnessDetector(alert_engine=alert_engine)
+
+        @detector.tool()
+        def get_weather(city: str) -> dict:
+            return {"city": city, "temp_f": 72}
+
+        detector.execute_sync("get_weather", {"city": "Miami"})
+        return detector
+
+    def test_auto_alerts_on_verify(self):
+        captured = []
+        engine = AlertEngine()
+        engine.add_rule(AlertRule(
+            classifications={Classification.FABRICATED},
+            min_confidence=0.0,
+            channels=[CallbackChannel(captured.append)],
+        ))
+        detector = self._make_detector_with_tool(alert_engine=engine)
+        detector.verify_sync("The weather in Miami is 999°F.")
+        assert len(captured) >= 1
+
+    def test_no_alerts_by_default(self):
+        detector = self._make_detector_with_tool(alert_engine=None)
+        results = detector.verify_sync("The weather in Miami is 72°F.")
+        assert len(results) == 1
+        assert detector.alert_engine is None
+
+    def test_alert_failure_doesnt_break_verify(self):
+        class BrokenEngine:
+            def process(self, results, session_id=""):
+                raise RuntimeError("alert engine exploded")
+
+        detector = self._make_detector_with_tool(
+            alert_engine=BrokenEngine(),
+        )
+        results = detector.verify_sync("The weather in Miami is 999°F.")
+        assert len(results) == 1
+
+    def test_alert_engine_property_settable(self):
+        detector = ToolWitnessDetector()
+        assert detector.alert_engine is None
+        engine = AlertEngine()
+        detector.alert_engine = engine
+        assert detector.alert_engine is engine

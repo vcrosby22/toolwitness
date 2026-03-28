@@ -6,7 +6,8 @@ Usage::
     from toolwitness.adapters.anthropic import wrap
 
     client = wrap(Anthropic())
-    # Use client normally — ToolWitness intercepts tool calls transparently
+    # wrap() attaches a .toolwitness monitor — use its helpers to
+    # extract, execute, and verify tool calls in your agent loop.
 
 Hooks between `tool_use` content blocks and `tool_result` blocks.
 """

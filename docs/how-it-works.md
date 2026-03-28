@@ -13,7 +13,7 @@ graph LR
 
 ## Step 1: Wrap
 
-Add ToolWitness to your agent with one line of code. ToolWitness wraps your tools (or your client) transparently — your agent code doesn't change.
+Add ToolWitness to your agent with a few lines of code. Register your tools with the detector, or use `wrap()` to attach a monitor to your OpenAI/Anthropic client. Then use ToolWitness helpers in your agent loop to execute and verify tool calls.
 
 ```python
 from toolwitness import ToolWitnessDetector
@@ -100,12 +100,15 @@ When ToolWitness detects failures, you can alert on them using the built-in aler
 - **Webhook** — POST to any URL
 - **Slack** — formatted messages with classification badges
 - **Callback** — call your own Python function
-- **Log** — structured log entries
+- **Log** — structured log entries (default)
 
-!!! note "Manual wiring required"
-    Alerting is opt-in. The `AlertEngine` does not fire automatically from `ToolWitnessDetector` — you wire it into your application code after verification. This keeps the detector lightweight and avoids side effects during testing.
+### Recommended: Auto-alerting (set once, fires every time)
+
+Pass an `AlertEngine` to the detector and alerts fire automatically after every `verify()` call — no extra code in your agent loop:
 
 ```python
+from toolwitness import ToolWitnessDetector
+from toolwitness.storage.sqlite import SQLiteStorage
 from toolwitness.alerting.rules import AlertEngine, AlertRule
 from toolwitness.alerting.channels import SlackChannel
 from toolwitness.core.types import Classification
@@ -117,22 +120,49 @@ engine.add_rule(AlertRule(
     channels=[SlackChannel("https://hooks.slack.com/services/...")],
 ))
 
-# After verification, process results through the alert engine
+detector = ToolWitnessDetector(
+    storage=SQLiteStorage(),
+    alert_engine=engine,
+)
+
+# From this point on, every verify() call automatically sends alerts
+# when fabrication or skips are detected. No extra code needed.
 results = detector.verify_sync("The weather is 85°F.")
-for result in results:
-    engine.process(result)
 ```
 
-Or configure via YAML:
+### Alternative: Manual wiring
+
+If you need full control over when alerts are processed, create the engine separately and call `process()` yourself:
+
+```python
+results = detector.verify_sync("The weather is 85°F.")
+engine.process(results, session_id=detector.session_id)
+```
+
+### YAML configuration
+
+Configure alerting rules in `toolwitness.yaml`:
 
 ```yaml
 alerting:
+  slack_webhook_url: "https://hooks.slack.com/services/..."
   rules:
     - classifications: [fabricated, skipped]
       min_confidence: 0.8
-      channels:
-        - type: slack
-          webhook_url: "https://hooks.slack.com/services/..."
+  session_rules:
+    - max_failure_rate: 0.15
+      min_total: 3
+```
+
+Then build the engine from config:
+
+```python
+from toolwitness.alerting.rules import AlertEngine
+
+engine = AlertEngine.from_config(config.alerting_config)
+detector = ToolWitnessDetector(
+    storage=SQLiteStorage(), alert_engine=engine,
+)
 ```
 
 ---

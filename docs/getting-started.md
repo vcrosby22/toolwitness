@@ -75,7 +75,9 @@ That's it. The tool call is recorded with a cryptographic receipt, the agent's r
     from toolwitness.storage.sqlite import SQLiteStorage
 
     client = wrap(OpenAI(), storage=SQLiteStorage())
-    # Use client normally — ToolWitness intercepts tool calls transparently
+    # wrap() attaches a .toolwitness monitor to your client.
+    # Use client.toolwitness.extract_tool_calls(), execute_tool_calls(),
+    # and verify() in your agent loop to monitor tool faithfulness.
     ```
 
     See [OpenAI adapter docs →](adapters/openai.md)

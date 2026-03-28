@@ -57,6 +57,20 @@ class ToolWitnessDetector:
         from toolwitness.storage.sqlite import SQLiteStorage
         detector = ToolWitnessDetector(storage=SQLiteStorage())
 
+    With auto-alerting::
+
+        from toolwitness.alerting.rules import AlertEngine, AlertRule
+        from toolwitness.alerting.channels import SlackChannel
+
+        engine = AlertEngine()
+        engine.add_rule(AlertRule(
+            channels=[SlackChannel("https://hooks.slack.com/...")],
+        ))
+        detector = ToolWitnessDetector(
+            storage=SQLiteStorage(), alert_engine=engine,
+        )
+        # Alerts fire automatically after every verify() call
+
     Multi-agent::
 
         orchestrator = ToolWitnessDetector(
@@ -76,6 +90,7 @@ class ToolWitnessDetector:
         session_id: str | None = None,
         agent_name: str | None = None,
         parent_session_id: str | None = None,
+        alert_engine: Any | None = None,
     ):
         self._config = config or {}
         self._monitor = ExecutionMonitor()
@@ -84,6 +99,7 @@ class ToolWitnessDetector:
         self._session_id = session_id or uuid.uuid4().hex[:16]
         self._agent_name = agent_name
         self._parent_session_id = parent_session_id
+        self._alert_engine = alert_engine
 
         if self._storage:
             self._storage.save_session(
@@ -104,6 +120,15 @@ class ToolWitnessDetector:
     @property
     def parent_session_id(self) -> str | None:
         return self._parent_session_id
+
+    @property
+    def alert_engine(self) -> Any | None:
+        """The ``AlertEngine`` attached to this detector, or ``None``."""
+        return self._alert_engine
+
+    @alert_engine.setter
+    def alert_engine(self, engine: Any | None) -> None:
+        self._alert_engine = engine
 
     def tool(
         self,
@@ -303,7 +328,21 @@ class ToolWitnessDetector:
             results.append(result)
             self._persist_verification(result)
 
+        self._process_alerts(results)
         return results
+
+    def _process_alerts(
+        self, results: list[VerificationResult],
+    ) -> None:
+        """Send results through the alert engine if one is configured."""
+        if self._alert_engine is None:
+            return
+        try:
+            self._alert_engine.process(
+                results, session_id=self._session_id,
+            )
+        except Exception:
+            logger.exception("Alert processing failed — continuing")
 
     def _persist_execution(self, tool_name: str) -> None:
         """Save the latest execution to storage if configured."""

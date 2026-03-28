@@ -29,6 +29,7 @@ class ToolWitnessConfig:
     embellishment_alert: bool = False
     webhook_url: str | None = None
     slack_webhook_url: str | None = None
+    alerting_config: dict[str, Any] | None = None
 
     @classmethod
     def load(cls, yaml_path: str | Path | None = None) -> ToolWitnessConfig:
@@ -86,6 +87,8 @@ def _apply_yaml(config: ToolWitnessConfig, data: dict[str, Any]) -> ToolWitnessC
         config.webhook_url = alerting["webhook_url"]
     if "slack_webhook_url" in alerting:
         config.slack_webhook_url = alerting["slack_webhook_url"]
+    if alerting:
+        config.alerting_config = alerting
 
     return config
 
