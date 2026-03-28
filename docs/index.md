@@ -108,32 +108,6 @@ Every tool interaction gets a classification with a confidence score:
 
 ---
 
-## Install in 10 Seconds
-
-```bash
-pip install toolwitness
-```
-
-Then verify your first agent response:
-
-```python
-from toolwitness import ToolWitnessDetector
-
-detector = ToolWitnessDetector()
-
-@detector.tool()
-def get_weather(city: str) -> dict:
-    return {"city": city, "temp_f": 72}
-
-detector.execute_sync("get_weather", {"city": "Miami"})
-results = detector.verify_sync("Miami is 72°F.")
-# classification=VERIFIED, confidence=0.95
-```
-
-[Full install instructions →](getting-started.md)
-
----
-
 ## Two Ways to Use ToolWitness
 
 <div class="grid cards" markdown>
@@ -142,17 +116,29 @@ results = detector.verify_sync("Miami is 72°F.")
 
     ---
 
-    Building your own AI agent in Python? Add a few lines to your agent loop and every tool call is monitored from that point on.
+    ### Install in 10 Seconds
 
-    Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**. The core verification engine is framework-agnostic — switch providers anytime without changing your ToolWitness integration.
+    ```bash
+    pip install toolwitness
+    ```
+
+    Add a few lines to your agent loop and every tool call is monitored from that point on:
 
     ```python
     from toolwitness import ToolWitnessDetector
-    detector = ToolWitnessDetector(storage=SQLiteStorage())
+
+    detector = ToolWitnessDetector()
 
     @detector.tool()
-    def get_weather(city: str) -> dict: ...
+    def get_weather(city: str) -> dict:
+        return {"city": city, "temp_f": 72}
+
+    detector.execute_sync("get_weather", {"city": "Miami"})
+    results = detector.verify_sync("Miami is 72°F.")
+    # classification=VERIFIED, confidence=0.95
     ```
+
+    Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**. The core verification engine is framework-agnostic — switch providers anytime without changing your ToolWitness integration.
 
     [SDK quick start →](getting-started.md)
 
@@ -160,7 +146,9 @@ results = detector.verify_sync("Miami is 72°F.")
 
     ---
 
-    Using an MCP-compatible tool like **Cursor** or **Claude Desktop**? One config change wraps any MCP server with ToolWitness monitoring. Zero code, zero changes to your agent.
+    ### One Config Change, Zero Code
+
+    Using an MCP-compatible tool like **Cursor** or **Claude Desktop**? Wrap any MCP server with ToolWitness monitoring:
 
     ```json
     {
@@ -172,6 +160,8 @@ results = detector.verify_sync("Miami is 72°F.")
       }
     }
     ```
+
+    Every tool call is recorded with cryptographic receipts. View results with `toolwitness dashboard` or `toolwitness check`.
 
     [MCP Proxy quick start →](getting-started.md#mcp-proxy)
 
