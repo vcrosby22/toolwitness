@@ -201,6 +201,54 @@ Pair with a Cursor rule to make verification automatic — see `examples/cursor-
 
 ---
 
+### `toolwitness digest`
+
+Generate a verification activity digest for a time period. Designed for daily reports and team notifications.
+
+```bash
+toolwitness digest                              # Last 24h, text to stdout
+toolwitness digest --period 7d --format json    # Last 7 days, JSON
+toolwitness digest --send                       # Deliver via Slack/webhook
+toolwitness digest --period 1h --format slack   # Last hour, Slack blocks
+```
+
+Output (text):
+
+```
+ToolWitness Digest — last 24h
+==================================================
+
+  Total verifications:  47
+  Failures:             3
+  Failure rate:         6.4%
+
+  Breakdown:
+    verified          44
+    fabricated         2
+    skipped            1
+
+  Top offending tools:
+    read_file                           2 failures / 15 total
+    get_file_info                       1 failures / 12 total
+```
+
+**Cron setup:** Schedule with `--send` to deliver daily reports via configured channels:
+
+```bash
+# Run at 6pm daily
+0 18 * * * /path/to/toolwitness digest --send --period 24h
+```
+
+Requires `slack_webhook_url` or `webhook_url` in `toolwitness.yaml` (or environment variables) for delivery.
+
+| Option | Default | Description |
+|---|---|---|
+| `--period DURATION` | `24h` | Time window: `1h`, `24h`, `7d`, etc. |
+| `--format FORMAT` | `text` | Output: `text`, `json`, or `slack` |
+| `--send` | off | Deliver via configured Slack/webhook channels |
+
+---
+
 ### `toolwitness executions`
 
 Show recorded tool executions — especially useful for **MCP Proxy** users whose tool calls are recorded as executions (not verifications).
@@ -325,10 +373,11 @@ Purge deletes matching sessions and **all related data** (executions, verificati
 
     - **`sdk`** — from `ToolWitnessDetector` in your agent code
     - **`mcp_proxy`** — from the `toolwitness proxy` MCP wrapper
+    - **`verification`** — from the verification bridge (`toolwitness verify` or `tw_verify_response`)
     - **`demo`** — from demo/seed scripts
     - **`test`** — from test harnesses
 
-    The dashboard shows these as colored badges. Use `--source` to purge a specific type.
+    The dashboard shows these as colored badges (Bridge, MCP Proxy, SDK, etc.). Use `--source` to purge a specific type.
 
 ---
 

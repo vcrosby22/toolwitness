@@ -463,10 +463,11 @@ function renderBreakdown(verifs) {
 }
 
 const SOURCE_BADGES = {
-    mcp_proxy: {bg:'#1e3a5f', color:'#60a5fa', label:'MCP Proxy'},
-    sdk:       {bg:'#052e16', color:'#4ade80', label:'SDK'},
-    demo:      {bg:'#1e293b', color:'#64748b', label:'Demo'},
-    test:      {bg:'#3b1f1f', color:'#fca5a5', label:'Test'},
+    mcp_proxy:     {bg:'#1e3a5f', color:'#60a5fa', label:'MCP Proxy'},
+    sdk:           {bg:'#052e16', color:'#4ade80', label:'SDK'},
+    verification:  {bg:'#3b1f3b', color:'#d8b4fe', label:'Bridge'},
+    demo:          {bg:'#1e293b', color:'#64748b', label:'Demo'},
+    test:          {bg:'#3b1f1f', color:'#fca5a5', label:'Test'},
 };
 
 function sourceBadge(s) {

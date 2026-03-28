@@ -29,6 +29,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from toolwitness.config import ToolWitnessConfig
 from toolwitness.storage.sqlite import SQLiteStorage
 from toolwitness.verification.bridge import (
     BridgeVerificationResult,
@@ -45,6 +46,7 @@ _DESCRIPTION = (
 mcp = FastMCP("toolwitness", instructions=_DESCRIPTION)
 
 _db_path: str | None = None
+_alert_engine: Any = None
 
 
 def _get_storage() -> SQLiteStorage:
@@ -54,10 +56,21 @@ def _get_storage() -> SQLiteStorage:
     return SQLiteStorage()
 
 
+def _get_alert_engine() -> Any:
+    return _alert_engine
+
+
 def configure(db_path: str | None = None) -> None:
-    """Set the database path before starting the server."""
-    global _db_path
+    """Set the database path and build the alert engine from config."""
+    global _db_path, _alert_engine
     _db_path = db_path
+
+    config = ToolWitnessConfig.load()
+    if config.alerting_config:
+        from toolwitness.alerting.rules import AlertEngine
+        _alert_engine = AlertEngine.from_config(config.alerting_config)
+    else:
+        _alert_engine = None
 
 
 @mcp.tool()
@@ -94,6 +107,7 @@ def tw_verify_response(
             response_text,
             since_minutes=float(time_window_minutes),
             persist=True,
+            alert_engine=_get_alert_engine(),
         )
         return _format_result(result)
     finally:

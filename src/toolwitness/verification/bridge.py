@@ -217,6 +217,7 @@ def verify_agent_response(
     since_minutes: float = 5.0,
     persist: bool = True,
     session_id: str | None = None,
+    alert_engine: Any | None = None,
 ) -> BridgeVerificationResult:
     """Verify an agent's response against recently recorded tool executions.
 
@@ -226,6 +227,9 @@ def verify_agent_response(
         since_minutes: Look back window for executions (default 5 min).
         persist: Whether to save verification results to the database.
         session_id: Session ID for storing results. Auto-generated if None.
+        alert_engine: Optional ``AlertEngine`` instance. When provided,
+            per-result rules and threshold rules are evaluated after
+            verification completes.
 
     Returns:
         BridgeVerificationResult with per-tool classifications.
@@ -273,5 +277,18 @@ def verify_agent_response(
 
         if persist:
             storage.save_verification(verify_session_id, verification)
+
+    if alert_engine is not None and result.verifications:
+        try:
+            alert_engine.process(
+                result.verifications,
+                session_id=verify_session_id,
+                storage=storage,
+            )
+        except Exception:
+            import logging
+            logging.getLogger("toolwitness").exception(
+                "Bridge alert processing failed — continuing"
+            )
 
     return result

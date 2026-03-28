@@ -312,6 +312,97 @@ def report(ctx: click.Context, fmt: str, output: str | None) -> None:
 
 @cli.command()
 @click.option(
+    "--period", "-p", default="24h", show_default=True,
+    help='Time window to cover (e.g. "24h", "7d", "1h").',
+)
+@click.option(
+    "--format", "-f", "fmt", default="text",
+    type=click.Choice(["text", "json", "slack"]),
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--send", is_flag=True, default=False,
+    help="Deliver the digest via configured Slack/webhook channels.",
+)
+@click.pass_context
+def digest(ctx: click.Context, period: str, fmt: str, send: bool) -> None:
+    """Generate a verification activity digest.
+
+    Summarises all verification results for a time period. Designed for
+    daily reports — run from cron with ``--send`` to deliver via Slack
+    or webhook.
+
+    Examples::
+
+        toolwitness digest                       # Last 24h, text to stdout
+        toolwitness digest --period 7d --format json
+        toolwitness digest --send                # Deliver via configured channels
+        0 18 * * * toolwitness digest --send     # Cron: 6pm daily
+    """
+    config = ctx.obj["config"]
+    storage = _open_storage(config)
+    if storage is None:
+        return
+
+    from toolwitness.reporting.digest import generate_digest
+
+    try:
+        period_seconds = _parse_duration(period)
+    except ValueError:
+        click.echo(f"Invalid period: {period}")
+        return
+
+    report = generate_digest(storage, period_seconds=period_seconds)
+    storage.close()
+
+    if fmt == "json":
+        click.echo(report.to_json())
+    elif fmt == "slack":
+        click.echo(json.dumps(report.to_slack_blocks(), indent=2))
+    else:
+        click.echo(report.to_text())
+
+    if send:
+        _send_digest(config, report)
+
+
+def _send_digest(config: ToolWitnessConfig, report: Any) -> None:
+    """Deliver digest through configured alerting channels."""
+    from toolwitness.alerting.channels import (
+        SlackChannel,
+        WebhookChannel,
+        _post_json,
+    )
+
+    sent = False
+
+    if config.slack_webhook_url:
+        slack_data = report.to_slack_blocks()
+        if _post_json(config.slack_webhook_url, slack_data):
+            click.echo("Digest sent to Slack.")
+            sent = True
+        else:
+            click.echo("Failed to send digest to Slack.", err=True)
+
+    if config.webhook_url:
+        if _post_json(config.webhook_url, report.to_dict()):
+            click.echo("Digest sent to webhook.")
+            sent = True
+        else:
+            click.echo("Failed to send digest to webhook.", err=True)
+
+    if not sent and not config.slack_webhook_url and not config.webhook_url:
+        click.echo(
+            "No delivery channels configured. "
+            "Set slack_webhook_url or webhook_url in toolwitness.yaml "
+            "or via environment variables.",
+            err=True,
+        )
+
+
+@cli.command()
+@click.option(
     "--output", "-o", default="toolwitness.yaml",
     show_default=True,
     help="Output config file path.",
@@ -470,11 +561,17 @@ def verify(
 
     from toolwitness.verification.bridge import verify_agent_response
 
+    alert_engine = None
+    if config.alerting_config:
+        from toolwitness.alerting.rules import AlertEngine
+        alert_engine = AlertEngine.from_config(config.alerting_config)
+
     result = verify_agent_response(
         storage,
         text,
         since_minutes=since_minutes,
         persist=not no_persist,
+        alert_engine=alert_engine,
     )
     storage.close()
 

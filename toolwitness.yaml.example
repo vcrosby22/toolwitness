@@ -14,3 +14,25 @@
 # alerting:
 #   webhook_url: null                         # TOOLWITNESS_WEBHOOK_URL (opt-in)
 #   slack_webhook_url: null                   # TOOLWITNESS_SLACK_WEBHOOK_URL (opt-in)
+#
+#   # Per-verification rules (fire on individual results)
+#   # rules:
+#   #   - name: critical_fabrication
+#   #     classifications: [fabricated, skipped]
+#   #     min_confidence: 0.8
+#   #
+#   # Session aggregate rules (fire on session failure rate)
+#   # session_rules:
+#   #   - name: session_failure_rate
+#   #     max_failure_rate: 0.15
+#   #     min_total: 3
+#   #
+#   # Time-window threshold rules (fire when failures accumulate)
+#   # threshold_rules:
+#   #   - name: failure_accumulation
+#   #     max_failures: 10            # Alert when >= 10 failures in window
+#   #     window_minutes: 60          # Sliding window size
+#   #   - name: high_failure_rate
+#   #     max_failure_rate: 0.20      # Alert when rate exceeds 20%
+#   #     min_verifications: 10       # Minimum sample size for rate check
+#   #     window_minutes: 60

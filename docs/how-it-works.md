@@ -262,9 +262,58 @@ See the [Multi-Agent Support](multi-agent.md) page for the full model, code exam
 
 ---
 
+## Alerting Model
+
+ToolWitness provides three tiers of notification for different user needs.
+
+### Per-result alerts
+
+Individual verification rules fire on each result. Configure classifications and minimum confidence:
+
+```yaml
+alerting:
+  slack_webhook_url: https://hooks.slack.com/services/...
+  rules:
+    - name: critical_fabrication
+      classifications: [fabricated, skipped]
+      min_confidence: 0.8
+```
+
+### Threshold alerts
+
+Time-window rules check for failure accumulation across sessions. Two modes:
+
+- **Count threshold** — alert when N or more failures occur within a sliding window
+- **Rate threshold** — alert when failure rate exceeds X% with a minimum sample size
+
+```yaml
+alerting:
+  threshold_rules:
+    - name: failure_accumulation
+      max_failures: 10
+      window_minutes: 60
+    - name: high_failure_rate
+      max_failure_rate: 0.20
+      min_verifications: 10
+      window_minutes: 60
+```
+
+### Daily digest
+
+Scheduled summary of verification activity. Run from cron or manually:
+
+```bash
+toolwitness digest --send --period 24h
+```
+
+See [Alerting Model](alerting-model.md) for the full design including user personas and configuration examples.
+
+---
+
 ## Next Steps
 
 - [Getting Started](getting-started.md) — install and run your first verification
 - [Multi-Agent Support](multi-agent.md) — monitor agent chains and swarms
 - [Privacy & Security](privacy.md) — what ToolWitness sees and doesn't see
 - [CLI Reference](cli.md) — all commands and options
+- [Alerting Model](alerting-model.md) — notification tiers, user personas, and configuration
