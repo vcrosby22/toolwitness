@@ -337,13 +337,17 @@ def init(output: str) -> None:
     "--port", "-p", default=8321, show_default=True,
     help="Port to listen on.",
 )
+@click.option(
+    "--db", "db_override", default=None,
+    help="Path to a specific database file (e.g. demo/toolwitness-demo.db).",
+)
 @click.pass_context
-def dashboard(ctx: click.Context, host: str, port: int) -> None:
+def dashboard(ctx: click.Context, host: str, port: int, db_override: str | None) -> None:
     """Start the local web dashboard."""
     from toolwitness.dashboard.server import start_dashboard
 
     config = ctx.obj["config"]
-    db_path = Path(config.db_path)
+    db_path = Path(db_override) if db_override else Path(config.db_path)
 
     if not db_path.exists():
         click.echo(
@@ -449,6 +453,139 @@ def export_cmd(
         click.echo(f"Exported {len(results)} records to {output}")
     else:
         click.echo(data)
+
+
+_DURATION_UNITS = {"h": 3600, "d": 86400, "w": 604800}
+
+
+def _parse_duration(value: str) -> float:
+    """Parse a duration string like '7d', '24h', '2w' into seconds."""
+    value = value.strip().lower()
+    for suffix, multiplier in _DURATION_UNITS.items():
+        if value.endswith(suffix):
+            return float(value[:-len(suffix)]) * multiplier
+    return float(value)
+
+
+@cli.command()
+@click.option(
+    "--demo", "purge_demo", is_flag=True, default=False,
+    help="Remove all demo sessions.",
+)
+@click.option(
+    "--source", "purge_source", default=None,
+    type=click.Choice(["demo", "sdk", "mcp_proxy", "test"]),
+    help="Remove sessions by source type.",
+)
+@click.option(
+    "--before", "purge_before", default=None,
+    help='Remove data older than duration (e.g. "7d", "24h", "2w").',
+)
+@click.option(
+    "--all", "purge_all", is_flag=True, default=False,
+    help="Remove ALL data (requires confirmation).",
+)
+@click.option(
+    "--dry-run", is_flag=True, default=False,
+    help="Show what would be deleted without deleting.",
+)
+@click.option(
+    "--yes", "-y", is_flag=True, default=False,
+    help="Skip confirmation prompt.",
+)
+@click.pass_context
+def purge(
+    ctx: click.Context,
+    purge_demo: bool,
+    purge_source: str | None,
+    purge_before: str | None,
+    purge_all: bool,
+    dry_run: bool,
+    yes: bool,
+) -> None:
+    """Remove old or demo data from the database.
+
+    Examples::
+
+        toolwitness purge --demo              # Remove demo data
+        toolwitness purge --before 7d         # Older than 7 days
+        toolwitness purge --source demo       # By source type
+        toolwitness purge --all               # Everything
+        toolwitness purge --before 24h --dry-run  # Preview
+    """
+    if purge_demo:
+        purge_source = "demo"
+
+    if not purge_source and not purge_before and not purge_all:
+        click.echo("Specify what to purge: --demo, --source, --before, or --all")
+        click.echo("Use --dry-run to preview. Use --help for details.")
+        return
+
+    config = ctx.obj["config"]
+    storage = _open_storage(config)
+    if storage is None:
+        return
+
+    before_ts: float | None = None
+    if purge_before:
+        try:
+            seconds = _parse_duration(purge_before)
+            before_ts = time.time() - seconds
+        except ValueError:
+            click.echo(f"Invalid duration: {purge_before}")
+            storage.close()
+            return
+
+    sessions = storage.query_sessions(limit=10000)
+    matching = []
+    for s in sessions:
+        if purge_all:
+            matching.append(s)
+        elif purge_source and s.get("source", "sdk") == purge_source:
+            matching.append(s)
+        elif before_ts and s.get("started_at", 0) < before_ts:
+            matching.append(s)
+
+    if not matching:
+        click.echo("No matching sessions found.")
+        storage.close()
+        return
+
+    click.echo(f"Found {len(matching)} session(s) to purge:")
+    for s in matching[:10]:
+        src = s.get("source", "sdk")
+        sid = s.get("session_id", "")[:12]
+        ts = time.strftime(
+            "%Y-%m-%d %H:%M", time.localtime(s.get("started_at", 0)),
+        )
+        click.echo(f"  {sid}…  source={src:10s}  started={ts}")
+    if len(matching) > 10:
+        click.echo(f"  … and {len(matching) - 10} more")
+
+    if dry_run:
+        click.echo("\n(dry run — nothing deleted)")
+        storage.close()
+        return
+
+    if not yes:
+        if not click.confirm("\nDelete these sessions and all related data?"):
+            click.echo("Cancelled.")
+            storage.close()
+            return
+
+    counts = storage.purge_sessions(
+        source=purge_source,
+        before=before_ts,
+        all_data=purge_all,
+    )
+    storage.close()
+
+    click.echo(
+        f"\nPurged: {counts['sessions']} sessions, "
+        f"{counts['executions']} executions, "
+        f"{counts['verifications']} verifications, "
+        f"{counts['alerts']} alerts"
+    )
 
 
 def _evaluate_fail_condition(

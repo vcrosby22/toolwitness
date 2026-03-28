@@ -107,6 +107,7 @@ class ToolWitnessDetector:
                 {},
                 agent_name=agent_name,
                 parent_session_id=parent_session_id,
+                source="sdk",
             )
 
     @property

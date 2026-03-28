@@ -97,7 +97,9 @@ class MCPMonitor:
             session_meta.update(metadata)
 
         if self._storage:
-            self._storage.save_session(self._session_id, session_meta)
+            self._storage.save_session(
+                self._session_id, session_meta, source="mcp_proxy",
+            )
 
     @property
     def monitor(self) -> ExecutionMonitor:

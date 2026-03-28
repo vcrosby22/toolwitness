@@ -24,6 +24,17 @@ from toolwitness.storage.sqlite import SQLiteStorage
 logger = logging.getLogger("toolwitness")
 
 
+def _parse_since(query: dict[str, list[str]]) -> float | None:
+    """Extract a ``since`` timestamp from query parameters."""
+    raw = query.get("since", [None])[0]
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        return None
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the ToolWitness dashboard."""
 
@@ -106,8 +117,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         limit = int(query.get("limit", ["50"])[0])
         classification = query.get("classification", [None])[0]
+        since = _parse_since(query)
         results = storage.query_verifications(
-            classification=classification, limit=limit,
+            classification=classification, limit=limit, since=since,
         )
         storage.close()
         self._send_json({"verifications": results, "total": len(results)})
@@ -121,8 +133,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         limit = int(query.get("limit", ["50"])[0])
         session_id = query.get("session_id", [None])[0]
         tool_name = query.get("tool", [None])[0]
+        since = _parse_since(query)
         results = storage.query_executions(
             session_id=session_id, tool_name=tool_name, limit=limit,
+            since=since,
         )
         storage.close()
         self._send_json({"executions": results, "total": len(results)})
@@ -133,7 +147,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "no database"}, status=404)
             return
 
-        tool_stats = storage.get_tool_stats()
+        since = _parse_since(query)
+        tool_stats = storage.get_tool_stats(since=since)
         storage.close()
         self._send_json({"tools": tool_stats})
 
@@ -143,7 +158,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "no database"}, status=404)
             return
 
-        sessions = storage.query_sessions(limit=50)
+        since = _parse_since(query)
+        sessions = storage.query_sessions(limit=50, since=since)
         storage.close()
         self._send_json({"sessions": sessions})
 
@@ -326,6 +342,14 @@ a.report-link:hover { text-decoration: underline; }
 <header>
     <h1>ToolWitness Dashboard</h1>
     <div style="display:flex;gap:0.75rem;align-items:center">
+        <select id="timeRange" class="refresh" onchange="loadAll()"
+            style="appearance:auto;padding:0.25rem 0.4rem">
+            <option value="3600">Last 1 hour</option>
+            <option value="86400" selected>Last 24 hours</option>
+            <option value="604800">Last 7 days</option>
+            <option value="2592000">Last 30 days</option>
+            <option value="0">All time</option>
+        </select>
         <a href="/report" class="report-link">Full Report</a>
         <a href="/about" class="report-link">About</a>
         <button class="refresh" onclick="loadAll()">Refresh</button>
@@ -377,14 +401,21 @@ async function fetchJSON(url) {
     return r.json();
 }
 
+function getSinceParam() {
+    const secs = parseInt(document.getElementById('timeRange').value);
+    if (!secs) return '';
+    return '&since=' + (Date.now()/1000 - secs);
+}
+
 async function loadAll() {
     try {
+        const sp = getSinceParam();
         const [vData, sData, sessData, hoData, exData] = await Promise.all([
-            fetchJSON('/api/verifications?limit=200'),
-            fetchJSON('/api/stats'),
-            fetchJSON('/api/sessions'),
+            fetchJSON('/api/verifications?limit=200' + sp),
+            fetchJSON('/api/stats' + sp.replace('&','?')),
+            fetchJSON('/api/sessions' + sp.replace('&','?')),
             fetchJSON('/api/handoffs'),
-            fetchJSON('/api/executions?limit=50'),
+            fetchJSON('/api/executions?limit=50' + sp),
         ]);
         renderKPIs(vData.verifications);
         renderBreakdown(vData.verifications);
@@ -431,10 +462,30 @@ function renderBreakdown(verifs) {
     document.getElementById('breakdown').innerHTML = html;
 }
 
+const SOURCE_BADGES = {
+    mcp_proxy: {bg:'#1e3a5f', color:'#60a5fa', label:'MCP Proxy'},
+    sdk:       {bg:'#052e16', color:'#4ade80', label:'SDK'},
+    demo:      {bg:'#1e293b', color:'#64748b', label:'Demo'},
+    test:      {bg:'#3b1f1f', color:'#fca5a5', label:'Test'},
+};
+
+function sourceBadge(s) {
+    let src = s.source || 'sdk';
+    if (src === 'sdk') {
+        try { const m = JSON.parse(s.metadata || '{}');
+            if (m.adapter === 'mcp') src = 'mcp_proxy';
+        } catch(e) {}
+    }
+    const b = SOURCE_BADGES[src] || SOURCE_BADGES.sdk;
+    return '<span style="background:'+b.bg+';color:'+b.color+
+        ';padding:0.1rem 0.4rem;border-radius:3px;font-size:0.65rem;'+
+        'font-weight:600">'+b.label+'</span>';
+}
+
 function renderSessions(sessions, handoffs) {
     const el = document.getElementById('sessions');
     if (!sessions || !sessions.length) {
-        el.innerHTML = '<p class="empty">No sessions yet.</p>';
+        el.innerHTML = '<p class="empty">No sessions in this time range.</p>';
         return;
     }
     const byId = {};
@@ -448,7 +499,7 @@ function renderSessions(sessions, handoffs) {
             children[s.parent_session_id].push(s);
         }
     });
-    let html = '<table><thead><tr><th></th><th>Agent</th>' +
+    let html = '<table><thead><tr><th></th><th>Source</th><th>Agent</th>' +
         '<th>Session</th><th>Started</th></tr></thead><tbody>';
     function addRow(s, depth) {
         const indent = depth * 20;
@@ -457,7 +508,8 @@ function renderSessions(sessions, handoffs) {
         const ts = new Date(s.started_at * 1000)
             .toLocaleTimeString();
         html += '<tr><td style="padding-left:' + indent + 'px">' +
-            arrow + '</td><td><strong>' + name + '</strong></td>' +
+            arrow + '</td><td>' + sourceBadge(s) + '</td>' +
+            '<td><strong>' + name + '</strong></td>' +
             '<td><code>' + s.session_id.substring(0, 10) +
             '</code></td><td>' + ts + '</td></tr>';
         (children[s.session_id] || []).forEach(

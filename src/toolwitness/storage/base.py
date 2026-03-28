@@ -27,6 +27,7 @@ class StorageBackend(ABC):
         *,
         agent_name: str | None = None,
         parent_session_id: str | None = None,
+        source: str = "sdk",
     ) -> None:
         """Persist session-level metadata."""
 

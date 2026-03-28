@@ -259,7 +259,8 @@ def seed_database(db_path: Path) -> tuple[int, int]:
         CREATE TABLE IF NOT EXISTS sessions (
             session_id TEXT PRIMARY KEY,
             started_at REAL NOT NULL,
-            metadata TEXT DEFAULT '{}'
+            metadata TEXT DEFAULT '{}',
+            source TEXT DEFAULT 'demo'
         );
         CREATE TABLE IF NOT EXISTS executions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,8 +305,8 @@ def seed_database(db_path: Path) -> tuple[int, int]:
         session_time = base_time + (i * 3600) + random.uniform(0, 600)
 
         conn.execute(
-            "INSERT INTO sessions (session_id, started_at, metadata) VALUES (?, ?, ?)",
-            (session_id, session_time, json.dumps({"label": session["label"]})),
+            "INSERT INTO sessions (session_id, started_at, metadata, source) VALUES (?, ?, ?, ?)",
+            (session_id, session_time, json.dumps({"label": session["label"]}), "demo"),
         )
 
         for j, tool in enumerate(session["tools"]):

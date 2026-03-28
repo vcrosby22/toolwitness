@@ -199,6 +199,41 @@ toolwitness export --format csv      # CSV export
 
 ---
 
+### `toolwitness purge`
+
+Remove old or demo data from the database. ToolWitness stores all data locally in SQLite — this command helps you manage that data over time.
+
+```bash
+toolwitness purge --demo              # Remove all demo sessions
+toolwitness purge --before 7d         # Remove data older than 7 days
+toolwitness purge --source demo       # Remove by source type
+toolwitness purge --before 24h --dry-run  # Preview what would be deleted
+toolwitness purge --all --yes         # Wipe everything (skip confirmation)
+```
+
+Purge deletes matching sessions and **all related data** (executions, verifications, alerts, false-positive annotations).
+
+| Option | Description |
+|---|---|
+| `--demo` | Shorthand for `--source demo` |
+| `--source TYPE` | Remove sessions by source: `demo`, `sdk`, `mcp_proxy`, `test` |
+| `--before DURATION` | Remove sessions older than duration: `24h`, `7d`, `2w`, `30d` |
+| `--all` | Remove everything (requires confirmation) |
+| `--dry-run` | Show what would be deleted without deleting |
+| `-y, --yes` | Skip the confirmation prompt |
+
+!!! tip "Session sources"
+    Every session is tagged with a **source** that identifies how it was created:
+
+    - **`sdk`** — from `ToolWitnessDetector` in your agent code
+    - **`mcp_proxy`** — from the `toolwitness proxy` MCP wrapper
+    - **`demo`** — from demo/seed scripts
+    - **`test`** — from test harnesses
+
+    The dashboard shows these as colored badges. Use `--source` to purge a specific type.
+
+---
+
 ### `toolwitness init`
 
 Create a configuration file with commented defaults.
@@ -206,6 +241,24 @@ Create a configuration file with commented defaults.
 ```bash
 toolwitness init                     # Creates toolwitness.yaml
 ```
+
+---
+
+## Data Lifecycle
+
+ToolWitness stores all data in a local SQLite database at `~/.toolwitness/toolwitness.db`. Data accumulates over time as you run agents or use the MCP Proxy.
+
+**Dashboard time filter:** The dashboard includes a time range dropdown (1h / 24h / 7d / 30d / All) so you can focus on recent data without deleting anything.
+
+**Source badges:** Sessions in the dashboard show their source (SDK, MCP Proxy, Demo) so you always know what you're looking at.
+
+**Cleanup:** Use `toolwitness purge` to remove old data. Common patterns:
+
+- After demoing: `toolwitness purge --demo` removes demo data
+- Weekly cleanup: `toolwitness purge --before 7d` keeps the last week
+- Fresh start: `toolwitness purge --all` wipes everything
+
+**Demo data:** The `scripts/seed_demo_data.py` and `scripts/demo_data.py` scripts write to `demo/toolwitness-demo.db` (not your production database). View demo data with `toolwitness dashboard --db demo/toolwitness-demo.db`.
 
 ---
 

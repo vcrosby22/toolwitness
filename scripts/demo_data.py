@@ -1,13 +1,20 @@
-"""Populate the ToolWitness database with realistic demo data for dashboard preview."""
+"""Populate a DEMO database with realistic data for dashboard preview.
+
+Writes to demo/toolwitness-demo.db by default — never to the production
+database at ~/.toolwitness/toolwitness.db.  Use ``toolwitness dashboard
+--db demo/toolwitness-demo.db`` to view the demo data.
+"""
 
 from pathlib import Path
 
 from toolwitness import ToolWitnessDetector
 from toolwitness.storage.sqlite import SQLiteStorage
 
+DEMO_DB = Path(__file__).resolve().parent.parent / "demo" / "toolwitness-demo.db"
+
 
 def main():
-    db_path = Path.home() / ".toolwitness" / "toolwitness.db"
+    db_path = DEMO_DB
     db_path.parent.mkdir(parents=True, exist_ok=True)
     storage = SQLiteStorage(db_path)
 
