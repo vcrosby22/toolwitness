@@ -30,9 +30,15 @@ One import, one line to wrap your client, and verification happens locally. We c
 
 ToolWitness was born from a research sprint across 35+ sources (Gartner, Forrester, Stanford HAI, Sequoia, NIST, OWASP) examining where agentic AI tooling has gaps. The finding: existing observability tools (LangSmith, Langfuse, Datadog) trace *that tools ran* but none verify *whether agents told the truth about what came back*.
 
-The closest academic work is [NabaOS](https://arxiv.org/abs/2603.10060) (Basu, March 2026) — a verification framework using HMAC-signed tool execution receipts to detect hallucinated tool results. NabaOS achieves 94.2% detection of fabricated tool references with under 15ms overhead, compared to cryptographic approaches like zkLLM that take 180 seconds per query.
+One notable academic contribution is [NabaOS](https://arxiv.org/abs/2603.10060) (Basu, March 2026), which validated that HMAC-signed execution receipts can detect hallucinated tool references with 94.2% accuracy and under 15ms overhead — far more practical than cryptographic approaches like zkLLM (180 seconds per query). NabaOS confirmed a key premise: lightweight receipts beat heavy cryptography for interactive agents.
 
-ToolWitness takes the same core insight — lightweight receipts beat heavy cryptography for interactive agents — and packages it as a practical, framework-agnostic tool that developers can install today.
+ToolWitness builds well beyond that premise. Where NabaOS is an academic proof-of-concept, ToolWitness is a production-ready tool with significant differences:
+
+- **Classification depth** — NabaOS is binary (verified or not). ToolWitness classifies into VERIFIED, FABRICATED, EMBELLISHED, and SKIPPED, each with a confidence score, because the severity and fix are different for each.
+- **Post-response verification** — ToolWitness adds structural matching, schema conformance checks, and multi-turn chain verification to catch fabrications that receipts alone miss (e.g., the agent called the tool but misrepresented what came back).
+- **Framework adapters** — `pip install toolwitness`, one line to wrap your OpenAI, Anthropic, LangChain, MCP, or CrewAI client. NabaOS has no installable package or integration layer.
+- **Actionable remediation** — every failure surfaces root-cause analysis and fix suggestions. NabaOS stops at detection.
+- **Developer surfaces** — local dashboard, CLI, HTML reports, CI gating, webhook alerts. NabaOS is a research paper.
 
 ## What open source gives you
 
