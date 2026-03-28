@@ -10,6 +10,7 @@ from toolwitness.core.types import ExecutionReceipt, ToolExecution
 from toolwitness.storage.sqlite import SQLiteStorage
 from toolwitness.verification.bridge import (
     BridgeVerificationResult,
+    _parse_kv_text,
     hydrate_execution,
     verify_agent_response,
 )
@@ -59,6 +60,35 @@ def seeded_storage(storage):
     storage.save_execution(session_id, execution2)
 
     return storage
+
+
+class TestParseKVText:
+    def test_parses_mcp_file_info(self):
+        text = (
+            "size: 6169\n"
+            "created: Fri Mar 13 2026 19:20:34 GMT-0700\n"
+            "modified: Fri Mar 27 2026 20:20:05 GMT-0700\n"
+            "isDirectory: false\n"
+            "isFile: true\n"
+            "permissions: 644"
+        )
+        result = _parse_kv_text(text)
+        assert result is not None
+        assert result["size"] == 6169
+        assert result["permissions"] == 644
+        assert result["isDirectory"] == "false"
+        assert result["isFile"] == "true"
+        assert "Mar 13" in result["created"]
+
+    def test_returns_none_for_short_text(self):
+        assert _parse_kv_text("hello") is None
+
+    def test_returns_none_for_non_kv_text(self):
+        assert _parse_kv_text("just some random text\nwith multiple lines") is None
+
+    def test_parses_directory_listing_as_none(self):
+        text = "[FILE] foo.md\n[FILE] bar.md"
+        assert _parse_kv_text(text) is None
 
 
 class TestHydrateExecution:

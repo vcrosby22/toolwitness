@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -68,6 +69,66 @@ class BridgeVerificationResult:
         }
 
 
+def _parse_kv_text(text: str) -> dict[str, Any] | None:
+    """Try to parse 'key: value' text (common MCP server output) into a dict.
+
+    Handles output like:
+        size: 6169
+        created: Fri Mar 13 2026
+        isDirectory: false
+        permissions: 644
+
+    Post-processing for the classifier:
+    - Boolean values are kept as short strings ("true"/"false") so the
+      structural matcher handles them as strings, not as int 0/1.
+    - Long string values (timestamps, paths) are simplified to extract
+      just the date portion, since agents summarize rather than quote
+      full timestamps verbatim.
+    """
+    lines = text.strip().splitlines()
+    if len(lines) < 2:
+        return None
+
+    result: dict[str, Any] = {}
+    for line in lines:
+        match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*):\s*(.+)$", line.strip())
+        if not match:
+            continue
+        key, raw_val = match.group(1), match.group(2).strip()
+
+        if raw_val.lower() in ("true", "false"):
+            result[key] = raw_val.lower()
+        else:
+            try:
+                result[key] = int(raw_val)
+            except ValueError:
+                try:
+                    result[key] = float(raw_val)
+                except ValueError:
+                    result[key] = _simplify_string_value(raw_val)
+
+    return result if len(result) >= 2 else None
+
+
+_DATE_PATTERN = re.compile(
+    r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+"
+    r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{4})"
+)
+
+
+def _simplify_string_value(value: str) -> str:
+    """Extract the core content from verbose MCP string values.
+
+    Long timestamps like 'Fri Mar 13 2026 19:20:34 GMT-0700 (Pacific
+    Daylight Time)' become 'Mar 13 2026' — the part an agent would
+    actually mention in a response.
+    """
+    date_match = _DATE_PATTERN.search(value)
+    if date_match:
+        return date_match.group(1)
+    return value
+
+
 def hydrate_execution(row: dict[str, Any]) -> ToolExecution | None:
     """Reconstruct a ToolExecution from a stored database row.
 
@@ -85,6 +146,13 @@ def hydrate_execution(row: dict[str, Any]) -> ToolExecution | None:
         if isinstance(output, str):
             with contextlib.suppress(json.JSONDecodeError):
                 output = json.loads(output)
+
+        # MCP servers often return text like "size: 6169\ncreated: ..."
+        # Parse into a dict so the structural matcher can compare values.
+        if isinstance(output, str):
+            parsed = _parse_kv_text(output)
+            if parsed is not None:
+                output = parsed
 
         args = row.get("args", "{}")
         if isinstance(args, str):
