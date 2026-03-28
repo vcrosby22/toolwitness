@@ -138,8 +138,30 @@ Self-contained HTML file with session timelines, failure detail cards with evide
 
 ---
 
+## Multi-Agent Verification
+
+When multiple agents collaborate, fabrication can compound across handoffs. Agent A calls a tool and gets clean data; Agent B receives it and misrepresents it; Agent C builds a report on the wrong data. Every individual trace looks fine.
+
+ToolWitness extends the verification model to multi-agent systems:
+
+- **Session hierarchy** — agents declare their name and parent, forming a tree
+- **Handoff tracking** — data transfers between agents are recorded with originating tool receipt IDs
+- **Cross-agent verification** — the receiving agent's claims are checked against the *original* tool output, not just what was passed to it
+
+```mermaid
+graph LR
+    A["Agent A: get_customer"] -->|"handoff"| B["Agent B: summarize"]
+    B -->|"handoff"| C["Agent C: report"]
+    A -.->|"cross-verify"| C
+```
+
+See the [Multi-Agent Support](multi-agent.md) page for the full model, code examples, and dashboard view.
+
+---
+
 ## Next Steps
 
 - [Getting Started](getting-started.md) — install and run your first verification
+- [Multi-Agent Support](multi-agent.md) — monitor agent chains and swarms
 - [Privacy & Security](privacy.md) — what ToolWitness sees and doesn't see
 - [CLI Reference](cli.md) — all commands and options

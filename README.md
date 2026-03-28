@@ -194,6 +194,46 @@ toolwitness check --fail-if "failure_rate > 0.05"
 toolwitness check --fail-if "fabricated_count > 0"
 ```
 
+## Multi-agent support
+
+ToolWitness monitors multi-agent systems — not just individual agents. When agents hand off data to
+each other, fabrication compounds: one corrupted value in Agent A becomes the foundation for Agent B's
+entire response. ToolWitness tracks these handoffs and catches corruption at the boundary.
+
+```python
+from toolwitness import ToolWitnessDetector
+from toolwitness.storage.sqlite import SQLiteStorage
+
+storage = SQLiteStorage()
+
+# Create linked agents
+orchestrator = ToolWitnessDetector(storage=storage, agent_name="orchestrator")
+researcher = ToolWitnessDetector(
+    storage=storage,
+    agent_name="researcher",
+    parent_session_id=orchestrator.session_id,
+)
+
+# Orchestrator calls tools, then hands off to researcher
+orchestrator.register_handoff(researcher, data="customer record")
+
+# Verify researcher's response against original tool outputs
+local, handoff_results = researcher.verify_with_handoffs(
+    "Customer is John Smith..."
+)
+```
+
+Three capabilities:
+
+- **Session hierarchy** — agents declare names and parents, forming a visible tree
+- **Handoff tracking** — data transfers recorded with originating tool receipt IDs
+- **Cross-agent verification** — receiving agent's claims checked against the *original* tool output
+
+All five adapters (OpenAI, Anthropic, LangChain, MCP, CrewAI) support `agent_name` and
+`parent_session_id` parameters.
+
+See the full guide at [Multi-Agent Support →](https://vcrosby22.github.io/toolwitness/multi-agent/)
+
 ## Dashboard
 
 ```bash
@@ -204,6 +244,7 @@ The local dashboard reads from SQLite and auto-refreshes every 5 seconds. Pages:
 
 - **Overview** — KPI cards, classification breakdown, recent failures
 - **Full Report** — session timelines, failure detail cards with evidence, remediation suggestions, per-tool stats
+- **Agent tree** — multi-agent sessions with hierarchy, handoff arrows, and corruption chain evidence
 
 ## Design principles
 

@@ -188,8 +188,41 @@ This creates `toolwitness.yaml`. Config precedence:
 
 ---
 
+## Multi-Agent Quick Start
+
+If you're running multiple agents that pass data to each other, ToolWitness can track handoffs and catch cross-agent fabrication:
+
+```python
+from toolwitness import ToolWitnessDetector
+from toolwitness.storage.sqlite import SQLiteStorage
+
+storage = SQLiteStorage()
+
+orchestrator = ToolWitnessDetector(
+    storage=storage, agent_name="orchestrator",
+)
+researcher = ToolWitnessDetector(
+    storage=storage,
+    agent_name="researcher",
+    parent_session_id=orchestrator.session_id,
+)
+
+# After orchestrator calls tools, record the handoff
+orchestrator.register_handoff(researcher, data="customer record")
+
+# Verify the researcher's response against original tool outputs
+local, handoff_results = researcher.verify_with_handoffs(
+    "Customer is John Smith..."
+)
+```
+
+See the full guide at [Multi-Agent Support →](multi-agent.md).
+
+---
+
 ## What's Next
 
 - [How It Works](how-it-works.md) — understand the verification engine
+- [Multi-Agent Support](multi-agent.md) — monitor agent chains and swarms
 - [Privacy & Security](privacy.md) — what ToolWitness sees and doesn't see
 - [Adapter docs](adapters/openai.md) — detailed per-framework guides

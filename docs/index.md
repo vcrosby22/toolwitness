@@ -86,6 +86,12 @@ Every tool interaction gets a classification with a confidence score:
 
     Catches data corruption across sequential tool calls. If Tool B's input doesn't match Tool A's output, ToolWitness flags the chain break.
 
+-   **Multi-agent support**
+
+    ---
+
+    Tracks agent hierarchies, records data handoffs, and catches fabrication that compounds across agent boundaries. [Learn more →](multi-agent.md)
+
 -   **Built-in remediation**
 
     ---
