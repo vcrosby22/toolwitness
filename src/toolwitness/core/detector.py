@@ -13,6 +13,7 @@ Multi-agent support:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import json
 import logging
@@ -259,10 +260,8 @@ class ToolWitnessDetector:
                     continue
                 original_output = exec_row.get("output")
                 if original_output and isinstance(original_output, str):
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
                         original_output = json.loads(original_output)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
 
                 result = classify_handoff(
                     tool_name=exec_row.get("tool_name", "unknown"),

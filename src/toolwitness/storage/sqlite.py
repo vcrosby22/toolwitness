@@ -6,6 +6,7 @@ File permissions: 0600 on Unix.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -160,16 +161,12 @@ class SQLiteStorage(StorageBackend):
     def _migrate(self) -> None:
         """Run idempotent migrations for databases created before v0.3."""
         for sql in _MIGRATION_SQL:
-            try:
+            with contextlib.suppress(sqlite3.OperationalError):
                 self._conn.execute(sql)
-            except sqlite3.OperationalError:
-                pass
         self._conn.commit()
 
     def _set_permissions(self) -> None:
         """Set 0600 permissions on the database file (Unix only)."""
-        import contextlib
-
         with contextlib.suppress(OSError):
             os.chmod(self._db_path, stat.S_IRUSR | stat.S_IWUSR)
 

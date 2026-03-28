@@ -53,7 +53,7 @@ class StorageBackend(ABC):
     def get_tool_stats(self) -> dict[str, Any]:
         """Aggregate statistics per tool (call count, failure rate, etc.)."""
 
-    def save_handoff(self, handoff: Handoff) -> None:
+    def save_handoff(self, handoff: Handoff) -> None:  # noqa: B027
         """Persist a handoff record. Override in backends that support it."""
 
     def query_handoffs(

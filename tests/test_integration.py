@@ -234,7 +234,7 @@ class TestMultiAgentSessionHierarchy:
     """Phase 1: agent_name and parent_session_id on sessions."""
 
     def test_agent_name_stored(self, storage):
-        d = ToolWitnessDetector(
+        ToolWitnessDetector(
             storage=storage, agent_name="researcher",
         )
         sessions = storage.query_sessions()
