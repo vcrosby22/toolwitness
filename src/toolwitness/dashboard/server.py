@@ -44,12 +44,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/stats": self._api_stats,
             "/api/sessions": self._api_sessions,
             "/api/health": self._api_health,
+            "/api/issue-url": self._api_issue_url,
             "/report": self._page_report,
         }
 
         handler = routes.get(path)
         if handler:
             handler(query)
+        else:
+            self._send_404()
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len) if content_len else b""
+
+        try:
+            data = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            data = {}
+
+        if path == "/api/false-positive":
+            self._api_mark_false_positive(data)
         else:
             self._send_404()
 
@@ -122,6 +139,49 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "status": "ok" if ok else "no_database",
             "timestamp": time.time(),
         })
+
+    def _api_issue_url(self, query: dict[str, list[str]]) -> None:
+        vid = query.get("id", [""])[0]
+        tool = query.get("tool", ["unknown"])[0]
+        classification = query.get("classification", ["unknown"])[0]
+        confidence = query.get("confidence", ["0"])[0]
+
+        from urllib.parse import quote
+        title = quote(f"[ToolWitness] {classification.upper()} detected: {tool}")
+        body = quote(
+            f"## ToolWitness Detection\n\n"
+            f"- **Tool:** `{tool}`\n"
+            f"- **Classification:** {classification.upper()}\n"
+            f"- **Confidence:** {confidence}\n"
+            f"- **Verification ID:** {vid}\n\n"
+            f"## Evidence\n\n"
+            f"_See dashboard or HTML report for full evidence details._\n\n"
+            f"## Suggested Fix\n\n"
+            f"_See remediation card in dashboard for fix suggestions._\n"
+        )
+        url = f"https://github.com/vcrosby22/toolwitness/issues/new?title={title}&body={body}"
+        self._send_json({"url": url})
+
+    def _api_mark_false_positive(self, data: dict[str, Any]) -> None:
+        vid = data.get("verification_id")
+        reason = data.get("reason", "")
+
+        if not vid:
+            self._send_json({"error": "verification_id required"}, status=400)
+            return
+
+        storage = self._open_storage()
+        if not storage:
+            self._send_json({"error": "no database"}, status=404)
+            return
+
+        ok = storage.mark_false_positive(int(vid), reason)
+        storage.close()
+
+        if ok:
+            self._send_json({"status": "ok", "verification_id": vid})
+        else:
+            self._send_json({"error": "verification not found"}, status=404)
 
     def _send_html(self, content: str) -> None:
         body = content.encode("utf-8")
@@ -220,6 +280,10 @@ th { color: #64748b; font-size: 0.7rem; text-transform: uppercase; }
 .empty { color: #475569; text-align: center; padding: 2rem; }
 a.report-link { color: #93c5fd; text-decoration: none; font-size: 0.85rem; }
 a.report-link:hover { text-decoration: underline; }
+.act-btn { background: #334155; border: 1px solid #475569; color: #e2e8f0;
+  padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem;
+  cursor: pointer; margin-right: 0.25rem; }
+.act-btn:hover { background: #475569; }
 .refresh { cursor: pointer; background: #334155; border: none;
   color: #e2e8f0; padding: 0.3rem 0.75rem; border-radius: 6px;
   font-size: 0.8rem; }
@@ -330,17 +394,53 @@ function renderRecent(verifs) {
         return;
     }
     let html = '<table><thead><tr><th>Tool</th><th>Classification</th>' +
-        '<th>Confidence</th><th>Session</th></tr></thead><tbody>';
+        '<th>Confidence</th><th>Session</th><th>Actions</th></tr></thead><tbody>';
     verifs.slice(0, 50).forEach(v => {
         const color = COLORS[v.classification] || '#6b7280';
+        const isFail = ['fabricated','skipped','embellished'].includes(v.classification);
+        let actions = '';
+        if (isFail) {
+            const fpBtn = '<button class="act-btn" onclick="markFP(' +
+                (v.id||0) + ')" title="Mark false positive">FP</button>';
+            const isBtn = '<button class="act-btn" onclick="createIssue(' +
+                (v.id||0) + ',\\'' + (v.tool_name||'') + '\\',\\'' +
+                v.classification + '\\',' + (v.confidence||0).toFixed(2) +
+                ')" title="Create GitHub issue">Issue</button>';
+            actions = fpBtn + isBtn;
+        }
         html += '<tr><td><code>' + (v.tool_name || '') + '</code></td>' +
             '<td><span class="badge" style="background:' + color + '">' +
             v.classification.toUpperCase() + '</span></td>' +
             '<td>' + (v.confidence || 0).toFixed(2) + '</td>' +
-            '<td>' + (v.session_id || '').substring(0, 8) + '</td></tr>';
+            '<td>' + (v.session_id || '').substring(0, 8) + '</td>' +
+            '<td>' + actions + '</td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('recent').innerHTML = html;
+}
+
+async function markFP(vid) {
+    if (!confirm('Mark verification #' + vid + ' as false positive?')) return;
+    const reason = prompt('Reason (optional):') || '';
+    try {
+        const r = await fetch('/api/false-positive', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({verification_id: vid, reason: reason})
+        });
+        const d = await r.json();
+        if (d.status === 'ok') { alert('Marked as false positive.'); loadAll(); }
+        else alert('Error: ' + (d.error || 'unknown'));
+    } catch(e) { alert('Failed: ' + e.message); }
+}
+
+async function createIssue(vid, tool, cls, conf) {
+    try {
+        const r = await fetch('/api/issue-url?id=' + vid + '&tool=' + tool +
+            '&classification=' + cls + '&confidence=' + conf);
+        const d = await r.json();
+        if (d.url) window.open(d.url, '_blank');
+    } catch(e) { alert('Failed: ' + e.message); }
 }
 
 function renderToolStats(tools) {

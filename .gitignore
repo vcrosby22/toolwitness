@@ -30,3 +30,6 @@ htmlcov/
 .DS_Store
 
 backlog/report.html
+
+# Demo artifacts — keep report, ignore DB
+!demo/toolwitness-demo-report.html

@@ -29,7 +29,7 @@
     Drop-in adapters for OpenAI, Anthropic, LangChain, MCP, and CrewAI
     so users add monitoring with 1-2 lines of code.
   priority: P0
-  status: open
+  status: done
   milestone: Week 2
   tags: [adapters, openai, anthropic, langchain, mcp, crewai]
 
@@ -40,7 +40,7 @@
     Command-line interface (toolwitness check, watch, stats, report)
     and static HTML report generation.
   priority: P1
-  status: open
+  status: done
   milestone: Week 2
   tags: [cli, reporting, html]
 
@@ -51,7 +51,7 @@
     Webhook alerts, Slack integration, configurable alert rules
     (per-classification, session-level failure rate).
   priority: P1
-  status: open
+  status: done
   milestone: Week 3
   tags: [alerting, webhooks, slack]
 
@@ -74,7 +74,7 @@
     Local web dashboard (localhost:8321), session timeline with chain
     visualization, and the hosted multi-user dashboard.
   priority: P2
-  status: open
+  status: done
   milestone: Week 4
   tags: [dashboard, visualization, timeline]
 
@@ -201,7 +201,7 @@
     Hooks between tool_calls in response and tool role messages.
     User code changes: 2 lines.
   priority: P0
-  status: open
+  status: done
   milestone: Week 2
   tags: [adapter, openai]
 
@@ -213,7 +213,7 @@
     Hooks between tool_use content blocks and tool_result blocks.
     Same wrap(client) pattern as OpenAI.
   priority: P0
-  status: open
+  status: done
   milestone: Week 2
   tags: [adapter, anthropic]
 
@@ -225,7 +225,7 @@
     ToolWitnessMiddleware for chains/agents with configurable
     on_fabrication behavior and confidence threshold.
   priority: P1
-  status: open
+  status: done
   milestone: Week 2
   tags: [adapter, langchain, middleware]
 
@@ -237,7 +237,7 @@
     Intercepts tools/call JSON-RPC messages between MCP Client
     and Server. Config points client at ToolWitness proxy.
   priority: P1
-  status: open
+  status: done
   milestone: Week 3
   tags: [adapter, mcp, proxy]
 
@@ -248,7 +248,7 @@
   description: >
     @monitored_tool decorator wrapping CrewAI's @tool.
   priority: P2
-  status: open
+  status: done
   milestone: Week 3
   tags: [adapter, crewai]
 
@@ -264,7 +264,7 @@
     Click-based CLI: toolwitness check --last N, watch (real-time),
     stats (per-tool rates), report --format html, init, export.
   priority: P1
-  status: open
+  status: done
   milestone: Week 2
   tags: [cli, click]
 
@@ -276,7 +276,7 @@
     Self-contained HTML file with session timeline, classification
     breakdown, failure detail cards.
   priority: P1
-  status: open
+  status: done
   milestone: Week 4
   tags: [report, html, visualization]
 
@@ -361,7 +361,7 @@
     Generic HTTP webhook + Slack-formatted webhook. Configurable
     payload (summary vs full). Opt-in only.
   priority: P1
-  status: open
+  status: done
   milestone: Week 3
   tags: [alerting, webhook, slack]
 
@@ -373,7 +373,7 @@
     Per-classification rules (e.g. FABRICATED + confidence > 0.8)
     and session-level rules (failure_rate > 0.15).
   priority: P1
-  status: open
+  status: done
   milestone: Week 3
   tags: [alerting, rules, config]
 
@@ -390,7 +390,7 @@
     failure detail, tool analytics, session timeline.
     Reads from local SQLite.
   priority: P2
-  status: open
+  status: done
   milestone: Week 4
   tags: [dashboard, localhost, web]
 
@@ -402,7 +402,7 @@
     Horizontal flow of green/yellow/red nodes with data-flow arrows.
     Chain breaks immediately visible. The "aha moment."
   priority: P1
-  status: open
+  status: done
   milestone: Week 4
   tags: [timeline, visualization, aha-moment]
 
@@ -442,7 +442,7 @@
     Quickstart, trust model, framework adapters, configuration,
     contributing guide.
   priority: P1
-  status: open
+  status: done
   milestone: Week 4
   tags: [docs, mkdocs, documentation]
 
@@ -470,7 +470,7 @@
     Per-classification fix tables: SKIPPED → force tool_choice;
     FABRICATED → strengthen prompt; EMBELLISHED → tighten schema.
   priority: P2
-  status: open
+  status: done
   milestone: Week 4
   tags: [remediation, suggestions, cards]
 

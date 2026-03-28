@@ -46,5 +46,9 @@ class StorageBackend(ABC):
     def get_tool_stats(self) -> dict[str, Any]:
         """Aggregate statistics per tool (call count, failure rate, etc.)."""
 
+    def mark_false_positive(self, verification_id: int, reason: str = "") -> bool:
+        """Mark a verification as a false positive. Override in backends that support it."""
+        return False
+
     def close(self) -> None:  # noqa: B027
         """Clean up resources. Override if needed."""

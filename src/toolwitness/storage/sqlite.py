@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS alerts (
     FOREIGN KEY (verification_id) REFERENCES verifications(id)
 );
 
+CREATE TABLE IF NOT EXISTS false_positives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    reason TEXT DEFAULT '',
+    created_at REAL NOT NULL,
+    FOREIGN KEY (verification_id) REFERENCES verifications(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_executions_session ON executions(session_id);
 CREATE INDEX IF NOT EXISTS idx_executions_tool ON executions(tool_name);
 CREATE INDEX IF NOT EXISTS idx_verifications_session ON verifications(session_id);
@@ -206,6 +214,22 @@ class SQLiteStorage(StorageBackend):
             row_dict["failure_rate"] = failures / total if total > 0 else 0.0
             stats[name] = row_dict
         return stats
+
+    def mark_false_positive(self, verification_id: int, reason: str = "") -> bool:
+        import time
+
+        cursor = self._conn.execute(
+            "SELECT id FROM verifications WHERE id = ?", (verification_id,),
+        )
+        if not cursor.fetchone():
+            return False
+
+        self._conn.execute(
+            "INSERT INTO false_positives (verification_id, reason, created_at) VALUES (?, ?, ?)",
+            (verification_id, reason, time.time()),
+        )
+        self._conn.commit()
+        return True
 
     def close(self) -> None:
         self._conn.close()

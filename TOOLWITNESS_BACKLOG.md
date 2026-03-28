@@ -19,6 +19,8 @@ python scripts/backlog_report.py --open   # generate and open in browser
 Items have `parent` (hierarchy) and `related` (cross-references) fields.
 Priority scale: P0 (critical) → P3 (low).
 
+**Want to contribute?** See an item you'd like to work on? Open an issue referencing the item ID and we'll coordinate. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
 ## Quick reference — known detection limitations (bugs)
 
 | ID | Title | Parent | Fix via |

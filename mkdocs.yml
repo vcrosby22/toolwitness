@@ -22,7 +22,11 @@ theme:
 markdown_extensions:
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.highlight:
@@ -38,6 +42,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - How It Works: how-it-works.md
+  - Remediation: remediation.md
+  - Gallery: gallery.md
+  - Testing Results: testing-results.md
   - Privacy & Security: privacy.md
   - Why Open Source: why-open-source.md
   - Adapters:

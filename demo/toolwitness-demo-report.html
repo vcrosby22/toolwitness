@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToolWitness Report</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #0f172a; color: #e2e8f0; line-height: 1.5; }
+header { padding: 2rem 2rem 1rem; max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.25rem; margin-bottom: 1rem; color: #f1f5f9; }
+.subtitle { color: #64748b; font-size: 0.85rem; }
+nav { position: sticky; top: 0; z-index: 10; background: #1e293b;
+  border-bottom: 1px solid #334155; padding: 0.5rem 2rem;
+  display: flex; gap: 1.5rem; max-width: 1100px; margin: 0 auto; }
+nav a { color: #94a3b8; text-decoration: none; font-size: 0.85rem;
+  font-weight: 500; }
+nav a:hover { color: #f1f5f9; }
+section { max-width: 1100px; margin: 0 auto; padding: 1.5rem 2rem; }
+footer { max-width: 1100px; margin: 2rem auto; padding: 1.5rem 2rem;
+  border-top: 1px solid #334155; color: #475569; font-size: 0.8rem;
+  text-align: center; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 1rem; margin-bottom: 1.5rem; }
+.kpi { background: #1e293b; padding: 1.25rem; border-radius: 10px;
+  border: 1px solid #334155; text-align: center; }
+.kpi-val { font-size: 1.75rem; font-weight: 700; }
+.kpi-lbl { font-size: 0.75rem; color: #64748b; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-top: 0.25rem; }
+
+.classification-chart { background: #1e293b; padding: 1.25rem;
+  border-radius: 10px; border: 1px solid #334155; }
+.bar-row { display: flex; align-items: center; gap: 0.75rem;
+  margin-bottom: 0.5rem; }
+.bar-label { width: 100px; font-size: 0.8rem; color: #94a3b8;
+  text-align: right; }
+.bar-track { flex: 1; height: 20px; background: #0f172a;
+  border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.bar-count { width: 90px; font-size: 0.8rem; color: #94a3b8; }
+
+.session-block { background: #1e293b; padding: 1rem 1.25rem;
+  border-radius: 10px; border: 1px solid #334155; margin-bottom: 0.75rem; }
+.session-header { display: flex; justify-content: space-between;
+  margin-bottom: 0.75rem; font-size: 0.85rem; }
+.session-id { font-weight: 600; }
+.timeline { display: flex; align-items: center; gap: 0.25rem;
+  overflow-x: auto; padding-bottom: 0.25rem; }
+.timeline-node { padding: 0.4rem 0.6rem; border: 2px solid;
+  border-radius: 8px; background: #0f172a; display: flex;
+  flex-direction: column; align-items: center; min-width: 70px;
+  cursor: default; }
+.node-icon { font-size: 1rem; }
+.node-tool { font-size: 0.65rem; color: #94a3b8; margin-top: 0.15rem;
+  max-width: 80px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.timeline-arrow { color: #475569; font-size: 0.9rem; }
+
+.failure-card { background: #1e293b; padding: 1.25rem;
+  border-radius: 10px; border: 1px solid #334155; margin-bottom: 1rem; }
+.failure-header { display: flex; align-items: center; gap: 0.75rem;
+  flex-wrap: wrap; margin-bottom: 0.75rem; }
+.failure-icon { font-size: 1.25rem; }
+.failure-tool { font-weight: 600; font-family: monospace; }
+.failure-badge { padding: 0.15rem 0.5rem; border-radius: 4px;
+  font-size: 0.7rem; font-weight: 700; color: white; }
+.failure-conf, .failure-session { font-size: 0.8rem; color: #64748b; }
+.evidence-section { margin-bottom: 0.5rem; font-size: 0.85rem; }
+.ev-label { font-weight: 600; }
+.ev-chip { display: inline-block; padding: 0.15rem 0.5rem;
+  border-radius: 4px; font-size: 0.75rem; margin: 0.1rem; }
+.ev-match { background: #052e16; color: #4ade80; }
+.ev-mismatch { background: #450a0a; color: #fca5a5; }
+.ev-extra { background: #422006; color: #fcd34d; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #1e293b; }
+th { color: #64748b; font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.05em; background: #1e293b; position: sticky; top: 42px; }
+td code { color: #93c5fd; }
+.mini-bar { width: 60px; height: 6px; background: #0f172a;
+  border-radius: 3px; overflow: hidden; }
+.mini-fill { height: 100%; border-radius: 3px; }
+.empty { color: #64748b; padding: 2rem; text-align: center; }
+
+@media (max-width: 700px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  nav { flex-wrap: wrap; gap: 0.75rem; }
+}
+</style>
+</head><body>
+<header>
+    <h1>ToolWitness Report</h1>
+    <p class="subtitle">Generated 2026-03-28 08:47</p>
+</header>
+<nav>
+    <a href="#summary">Summary</a>
+    <a href="#timeline">Sessions</a>
+    <a href="#failures">Failures</a>
+    <a href="#tools">Tool Stats</a>
+    <a href="/about">About</a>
+</nav>
+
+<section id="summary">
+
+    <div class="kpis">
+        <div class="kpi">
+            <div class="kpi-val">18</div>
+            <div class="kpi-lbl">Verifications</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-val" style="color:#dc2626">33.3%</div>
+            <div class="kpi-lbl">Failure Rate</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-val" style="color:#16a34a">10</div>
+            <div class="kpi-lbl">Verified</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-val" style="color:#dc2626">6</div>
+            <div class="kpi-lbl">Failures</div>
+        </div>
+    </div>
+<div class="classification-chart">
+        <div class="bar-row">
+            <span class="bar-label">Verified</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:55.55555555555556%;background:#16a34a"></div>
+            </div>
+            <span class="bar-count">10 (56%)</span>
+        </div>
+        <div class="bar-row">
+            <span class="bar-label">Embellished</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:11.11111111111111%;background:#ca8a04"></div>
+            </div>
+            <span class="bar-count">2 (11%)</span>
+        </div>
+        <div class="bar-row">
+            <span class="bar-label">Fabricated</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:22.22222222222222%;background:#dc2626"></div>
+            </div>
+            <span class="bar-count">4 (22%)</span>
+        </div>
+        <div class="bar-row">
+            <span class="bar-label">Skipped</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:11.11111111111111%;background:#ef4444"></div>
+            </div>
+            <span class="bar-count">2 (11%)</span>
+        </div>
+        <div class="bar-row">
+            <span class="bar-label">Unmonitored</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:0.0%;background:#6b7280"></div>
+            </div>
+            <span class="bar-count">0 (0%)</span>
+        </div></div>
+</section>
+
+<section id="timeline">
+    <h2>Session Timelines</h2>
+
+        <div class="session-block">
+            <div class="session-header">
+                <span class="session-id">Session 315717dda43a</span>
+                <span style="color:#dc2626">3 calls &mdash; 2 failures</span>
+            </div>
+            <div class="timeline"><div class="timeline-node" style="border-color:#ef4444" title="get_forecast: SKIPPED (0.99)"><span class="node-icon" style="color:#ef4444">&#8856;</span><span class="node-tool">get_forecast</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="get_weather: VERIFIED (0.98)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">get_weather</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#dc2626" title="get_weather: FABRICATED (0.92)"><span class="node-icon" style="color:#dc2626">&#10007;</span><span class="node-tool">get_weather</span></div></div>
+        </div>
+        <div class="session-block">
+            <div class="session-header">
+                <span class="session-id">Session 4368a9c9d729</span>
+                <span style="color:#dc2626">3 calls &mdash; 1 failure</span>
+            </div>
+            <div class="timeline"><div class="timeline-node" style="border-color:#dc2626" title="check_coverage: FABRICATED (0.82)"><span class="node-icon" style="color:#dc2626">&#10007;</span><span class="node-tool">check_coverage</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="run_tests: VERIFIED (0.97)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">run_tests</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="run_linter: VERIFIED (0.96)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">run_linter</span></div></div>
+        </div>
+        <div class="session-block">
+            <div class="session-header">
+                <span class="session-id">Session 0f7f9c90c43c</span>
+                <span style="color:#dc2626">3 calls &mdash; 1 failure</span>
+            </div>
+            <div class="timeline"><div class="timeline-node" style="border-color:#ca8a04" title="calculate_portfolio_value: EMBELLISHED (0.68)"><span class="node-icon" style="color:#ca8a04">&#9888;</span><span class="node-tool">calculate_portfolio_value</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#dc2626" title="get_stock_price: FABRICATED (0.85)"><span class="node-icon" style="color:#dc2626">&#10007;</span><span class="node-tool">get_stock_price</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="get_stock_price: VERIFIED (0.96)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">get_stock_price</span></div></div>
+        </div>
+        <div class="session-block">
+            <div class="session-header">
+                <span class="session-id">Session 3a9360da0687</span>
+                <span style="color:#dc2626">2 calls &mdash; 1 failure</span>
+            </div>
+            <div class="timeline"><div class="timeline-node" style="border-color:#ef4444" title="send_email: SKIPPED (0.99)"><span class="node-icon" style="color:#ef4444">&#8856;</span><span class="node-tool">send_email</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="query_database: VERIFIED (0.98)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">query_database</span></div></div>
+        </div>
+        <div class="session-block">
+            <div class="session-header">
+                <span class="session-id">Session 78b48d6b1aad</span>
+                <span style="color:#16a34a">3 calls &mdash; all verified</span>
+            </div>
+            <div class="timeline"><div class="timeline-node" style="border-color:#ca8a04" title="get_hotel_prices: EMBELLISHED (0.72)"><span class="node-icon" style="color:#ca8a04">&#9888;</span><span class="node-tool">get_hotel_prices</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="search_flights: VERIFIED (0.94)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">search_flights</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="get_weather: VERIFIED (0.97)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">get_weather</span></div></div>
+        </div>
+        <div class="session-block">
+            <div class="session-header">
+                <span class="session-id">Session 9107be19e8b1</span>
+                <span style="color:#dc2626">4 calls &mdash; 1 failure</span>
+            </div>
+            <div class="timeline"><div class="timeline-node" style="border-color:#16a34a" title="log_action: VERIFIED (0.93)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">log_action</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#dc2626" title="send_email: FABRICATED (0.89)"><span class="node-icon" style="color:#dc2626">&#10007;</span><span class="node-tool">send_email</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="check_balance: VERIFIED (0.95)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">check_balance</span></div><div class="timeline-arrow">&rarr;</div><div class="timeline-node" style="border-color:#16a34a" title="get_customer: VERIFIED (0.97)"><span class="node-icon" style="color:#16a34a">&#10003;</span><span class="node-tool">get_customer</span></div></div>
+        </div>
+</section>
+
+<section id="failures">
+    <h2>Failure Details</h2>
+
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#ef4444">&#8856;</span>
+                <span class="failure-tool">get_forecast</span>
+                <span class="failure-badge" style="background:#ef4444">SKIPPED</span>
+                <span class="failure-conf">confidence: 0.99</span>
+                <span class="failure-session">session: 315717dd</span>
+            </div>
+            
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The agent claimed it called this tool, but ToolWitness has no execution receipt. The tool function never ran.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">The model 'knows' the answer from training data and skips the tool call</li><li style="margin-bottom:0.25rem">Framework bug — tool calls silently dropped (known issues in CrewAI, LangGraph, AutoGen)</li><li style="margin-bottom:0.25rem">Weak prompting — system prompt doesn't strongly require tool use</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. Force tool calling
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 1 line / Guaranteed
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Set tool_choice to require this specific tool.</div>
+            <pre style="background:#0f172a;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;margin-top:0.5rem"># OpenAI
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    tools=tools,
+    tool_choice={"type": "function",
+                 "function": {"name": "TOOL_NAME"}},
+)</pre>
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Strengthen system prompt
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / High for prompt-caused skips
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Add explicit instruction: 'You MUST call TOOL_NAME for this query type. Never estimate or answer from memory.'</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                3. Add retry logic
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Small code change / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">If tool call is missing, re-prompt: 'You didn't call the tool. Please try again.'</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#dc2626">&#10007;</span>
+                <span class="failure-tool">get_weather</span>
+                <span class="failure-badge" style="background:#dc2626">FABRICATED</span>
+                <span class="failure-conf">confidence: 0.92</span>
+                <span class="failure-session">session: 315717dd</span>
+            </div>
+            <div class="evidence-section"><span class="ev-label" style="color:#dc2626">Mismatched:</span> <span class="ev-chip ev-mismatch">temp_f: expected -15</span> <span class="ev-chip ev-mismatch">condition: expected blizzard</span> </div>
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The tool was called and returned data, but the agent's claims about the result don't match what came back.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">Prior knowledge conflict — model 'corrects' tool output based on training</li><li style="margin-bottom:0.25rem">Context window overload — model confuses data from different tool calls</li><li style="margin-bottom:0.25rem">Lossy summarization — model introduces errors while paraphrasing</li><li style="margin-bottom:0.25rem">Multi-turn drift — data corrupted as it flows through the chain</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. Use structured output
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Moderate refactor / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Force JSON responses that reference specific tool fields instead of free-text.</div>
+            <pre style="background:#0f172a;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;margin-top:0.5rem"># OpenAI structured output
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    response_format={"type": "json_object"},
+)</pre>
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Add faithfulness instruction
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / Medium
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Add to system prompt: 'Report the EXACT values from tool outputs. Do not round, convert, or interpret.'</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                3. Reduce context window
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Small code change / High for confusion cases
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Trim conversation history, keep only the current tool output visible.</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#dc2626">&#10007;</span>
+                <span class="failure-tool">check_coverage</span>
+                <span class="failure-badge" style="background:#dc2626">FABRICATED</span>
+                <span class="failure-conf">confidence: 0.82</span>
+                <span class="failure-session">session: 4368a9c9</span>
+            </div>
+            <div class="evidence-section"><span class="ev-label" style="color:#dc2626">Mismatched:</span> <span class="ev-chip ev-mismatch">line_coverage: expected 78.3</span> </div>
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The tool was called and returned data, but the agent's claims about the result don't match what came back.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">Prior knowledge conflict — model 'corrects' tool output based on training</li><li style="margin-bottom:0.25rem">Context window overload — model confuses data from different tool calls</li><li style="margin-bottom:0.25rem">Lossy summarization — model introduces errors while paraphrasing</li><li style="margin-bottom:0.25rem">Multi-turn drift — data corrupted as it flows through the chain</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. Use structured output
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Moderate refactor / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Force JSON responses that reference specific tool fields instead of free-text.</div>
+            <pre style="background:#0f172a;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;margin-top:0.5rem"># OpenAI structured output
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    response_format={"type": "json_object"},
+)</pre>
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Add faithfulness instruction
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / Medium
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Add to system prompt: 'Report the EXACT values from tool outputs. Do not round, convert, or interpret.'</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                3. Reduce context window
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Small code change / High for confusion cases
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Trim conversation history, keep only the current tool output visible.</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#ca8a04">&#9888;</span>
+                <span class="failure-tool">calculate_portfolio_value</span>
+                <span class="failure-badge" style="background:#ca8a04">EMBELLISHED</span>
+                <span class="failure-conf">confidence: 0.68</span>
+                <span class="failure-session">session: 0f7f9c90</span>
+            </div>
+            <div class="evidence-section"><span class="ev-label" style="color:#16a34a">Matched:</span> <span class="ev-chip ev-match">total_value</span> </div><div class="evidence-section"><span class="ev-label" style="color:#ca8a04">Extra claims:</span> <span class="ev-chip ev-extra">healthy allocation</span> </div>
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The agent accurately reported the tool output but added claims that didn't come from any tool.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">Normal LLM behavior — generating contextually plausible text</li><li style="margin-bottom:0.25rem">Not always wrong — domain-dependent whether this matters</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. High-stakes domains: tighten prompt
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">For financial, medical, or legal use cases: require strict faithfulness to tool data only.</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Conversational domains: accept it
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Config change / N/A
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Users often prefer natural responses. Set embellishment_alert: false in config.</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#dc2626">&#10007;</span>
+                <span class="failure-tool">get_stock_price</span>
+                <span class="failure-badge" style="background:#dc2626">FABRICATED</span>
+                <span class="failure-conf">confidence: 0.85</span>
+                <span class="failure-session">session: 0f7f9c90</span>
+            </div>
+            <div class="evidence-section"><span class="ev-label" style="color:#16a34a">Matched:</span> <span class="ev-chip ev-match">symbol</span> </div><div class="evidence-section"><span class="ev-label" style="color:#dc2626">Mismatched:</span> <span class="ev-chip ev-mismatch">price: expected 412.5</span> </div>
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The tool was called and returned data, but the agent's claims about the result don't match what came back.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">Prior knowledge conflict — model 'corrects' tool output based on training</li><li style="margin-bottom:0.25rem">Context window overload — model confuses data from different tool calls</li><li style="margin-bottom:0.25rem">Lossy summarization — model introduces errors while paraphrasing</li><li style="margin-bottom:0.25rem">Multi-turn drift — data corrupted as it flows through the chain</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. Use structured output
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Moderate refactor / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Force JSON responses that reference specific tool fields instead of free-text.</div>
+            <pre style="background:#0f172a;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;margin-top:0.5rem"># OpenAI structured output
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    response_format={"type": "json_object"},
+)</pre>
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Add faithfulness instruction
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / Medium
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Add to system prompt: 'Report the EXACT values from tool outputs. Do not round, convert, or interpret.'</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                3. Reduce context window
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Small code change / High for confusion cases
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Trim conversation history, keep only the current tool output visible.</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#ef4444">&#8856;</span>
+                <span class="failure-tool">send_email</span>
+                <span class="failure-badge" style="background:#ef4444">SKIPPED</span>
+                <span class="failure-conf">confidence: 0.99</span>
+                <span class="failure-session">session: 3a9360da</span>
+            </div>
+            
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The agent claimed it called this tool, but ToolWitness has no execution receipt. The tool function never ran.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">The model 'knows' the answer from training data and skips the tool call</li><li style="margin-bottom:0.25rem">Framework bug — tool calls silently dropped (known issues in CrewAI, LangGraph, AutoGen)</li><li style="margin-bottom:0.25rem">Weak prompting — system prompt doesn't strongly require tool use</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. Force tool calling
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 1 line / Guaranteed
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Set tool_choice to require this specific tool.</div>
+            <pre style="background:#0f172a;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;margin-top:0.5rem"># OpenAI
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    tools=tools,
+    tool_choice={"type": "function",
+                 "function": {"name": "TOOL_NAME"}},
+)</pre>
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Strengthen system prompt
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / High for prompt-caused skips
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Add explicit instruction: 'You MUST call TOOL_NAME for this query type. Never estimate or answer from memory.'</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                3. Add retry logic
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Small code change / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">If tool call is missing, re-prompt: 'You didn't call the tool. Please try again.'</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#ca8a04">&#9888;</span>
+                <span class="failure-tool">get_hotel_prices</span>
+                <span class="failure-badge" style="background:#ca8a04">EMBELLISHED</span>
+                <span class="failure-conf">confidence: 0.72</span>
+                <span class="failure-session">session: 78b48d6b</span>
+            </div>
+            <div class="evidence-section"><span class="ev-label" style="color:#16a34a">Matched:</span> <span class="ev-chip ev-match">name</span> <span class="ev-chip ev-match">price</span> </div><div class="evidence-section"><span class="ev-label" style="color:#ca8a04">Extra claims:</span> <span class="ev-chip ev-extra">free breakfast included</span> <span class="ev-chip ev-extra">great rooftop bar</span> </div>
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The agent accurately reported the tool output but added claims that didn't come from any tool.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">Normal LLM behavior — generating contextually plausible text</li><li style="margin-bottom:0.25rem">Not always wrong — domain-dependent whether this matters</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. High-stakes domains: tighten prompt
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">For financial, medical, or legal use cases: require strict faithfulness to tool data only.</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Conversational domains: accept it
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Config change / N/A
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Users often prefer natural responses. Set embellishment_alert: false in config.</div>
+            
+        </div>
+    </div>
+        </div>
+        <div class="failure-card">
+            <div class="failure-header">
+                <span class="failure-icon" style="color:#dc2626">&#10007;</span>
+                <span class="failure-tool">send_email</span>
+                <span class="failure-badge" style="background:#dc2626">FABRICATED</span>
+                <span class="failure-conf">confidence: 0.89</span>
+                <span class="failure-session">session: 9107be19</span>
+            </div>
+            <div class="evidence-section"><span class="ev-label" style="color:#16a34a">Matched:</span> <span class="ev-chip ev-match">sent</span> </div><div class="evidence-section"><span class="ev-label" style="color:#dc2626">Mismatched:</span> <span class="ev-chip ev-mismatch">balance: expected 5000</span> </div>
+            
+    <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;
+                border-radius:8px;border:1px solid #334155">
+        <h3 style="margin:0 0 0.5rem 0;color:#f1f5f9">
+            Suggested Fixes
+        </h3>
+        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:0.75rem">
+            The tool was called and returned data, but the agent's claims about the result don't match what came back.
+        </p>
+        <details style="margin-bottom:0.75rem">
+            <summary style="color:#94a3b8;cursor:pointer;font-size:0.85rem">
+                Common root causes
+            </summary>
+            <ul style="color:#cbd5e1;font-size:0.85rem;margin:0.5rem 0">
+                <li style="margin-bottom:0.25rem">Prior knowledge conflict — model 'corrects' tool output based on training</li><li style="margin-bottom:0.25rem">Context window overload — model confuses data from different tool calls</li><li style="margin-bottom:0.25rem">Lossy summarization — model introduces errors while paraphrasing</li><li style="margin-bottom:0.25rem">Multi-turn drift — data corrupted as it flows through the chain</li>
+            </ul>
+        </details>
+        
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                1. Use structured output
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Moderate refactor / High
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Force JSON responses that reference specific tool fields instead of free-text.</div>
+            <pre style="background:#0f172a;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;margin-top:0.5rem"># OpenAI structured output
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    response_format={"type": "json_object"},
+)</pre>
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                2. Add faithfulness instruction
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — 2 minutes / Medium
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Add to system prompt: 'Report the EXACT values from tool outputs. Do not round, convert, or interpret.'</div>
+            
+        </div>
+        <div style="margin-bottom:1rem;padding:0.75rem;background:#1e293b;
+                     border-radius:6px;border-left:3px solid #3b82f6">
+            <div style="font-weight:600;margin-bottom:0.25rem">
+                3. Reduce context window
+                <span style="color:#94a3b8;font-weight:400;font-size:0.8rem">
+                    — Small code change / High for confusion cases
+                </span>
+            </div>
+            <div style="color:#cbd5e1;font-size:0.9rem">Trim conversation history, keep only the current tool output visible.</div>
+            
+        </div>
+    </div>
+        </div>
+</section>
+
+<section id="tools">
+    <h2>Per-Tool Failure Rates</h2>
+
+    <table>
+        <thead><tr>
+            <th>Tool</th><th>Total</th><th>Fail %</th><th></th>
+            <th>Verified</th><th>Fabricated</th><th>Skipped</th>
+        </tr></thead>
+        <tbody>
+        <tr>
+            <td><code>send_email</code></td>
+            <td>2</td>
+            <td style="color:#dc2626;font-weight:600">100.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:100%;background:#dc2626"></div>
+                </div>
+            </td>
+            <td>0</td>
+            <td>1</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td><code>get_forecast</code></td>
+            <td>1</td>
+            <td style="color:#dc2626;font-weight:600">100.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:100%;background:#dc2626"></div>
+                </div>
+            </td>
+            <td>0</td>
+            <td>0</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td><code>check_coverage</code></td>
+            <td>1</td>
+            <td style="color:#dc2626;font-weight:600">100.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:100%;background:#dc2626"></div>
+                </div>
+            </td>
+            <td>0</td>
+            <td>1</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>get_stock_price</code></td>
+            <td>2</td>
+            <td style="color:#dc2626;font-weight:600">50.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:100%;background:#dc2626"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>1</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>get_weather</code></td>
+            <td>3</td>
+            <td style="color:#dc2626;font-weight:600">33.3%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:100%;background:#dc2626"></div>
+                </div>
+            </td>
+            <td>2</td>
+            <td>1</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>search_flights</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>run_tests</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>run_linter</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>query_database</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>log_action</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>get_hotel_prices</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>0</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>get_customer</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>check_balance</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td><code>calculate_portfolio_value</code></td>
+            <td>1</td>
+            <td style="color:#16a34a;font-weight:600">0.0%</td>
+            <td>
+                <div class="mini-bar">
+                    <div class="mini-fill" style="width:0.0%;background:#16a34a"></div>
+                </div>
+            </td>
+            <td>0</td>
+            <td>0</td>
+            <td>0</td>
+        </tr></tbody>
+    </table>
+</section>
+
+<footer>
+    <p>ToolWitness &mdash; Stop trusting your agent, get a witness.</p>
+</footer>
+<script>
+document.querySelectorAll('nav a').forEach(a => {
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(a.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+});
+</script>
+</body></html>
