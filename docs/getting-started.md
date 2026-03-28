@@ -222,6 +222,71 @@ See the full guide at [Multi-Agent Support →](multi-agent.md).
 
 ---
 
+## MCP Proxy
+
+If you use **Cursor**, **Claude Desktop**, or any MCP-compatible host, you can monitor tool calls with zero code changes. The `toolwitness proxy` command wraps any MCP server transparently.
+
+### Setup
+
+In your MCP config file, replace the server command with `toolwitness proxy --`:
+
+=== "Cursor (.cursor/mcp.json)"
+
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"]
+        }
+      }
+    }
+    ```
+
+=== "Claude Desktop"
+
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"]
+        }
+      }
+    }
+    ```
+
+That's it. Every tool call through that MCP server is now recorded with cryptographic receipts and stored in your local SQLite database.
+
+### View results
+
+```bash
+toolwitness check --last 10     # Recent verifications
+toolwitness stats               # Per-tool failure rates
+toolwitness dashboard           # Local web dashboard at localhost:8321
+```
+
+### How it works
+
+The proxy sits between the MCP host and the real server, forwarding all JSON-RPC messages without modification. On every `tools/call` request and response, it records the interaction via the same verification engine used by the SDK adapters.
+
+```mermaid
+graph LR
+    Host["Cursor / Claude Desktop"] -->|"stdio"| Proxy["toolwitness proxy"]
+    Proxy -->|"stdio"| Server["Real MCP Server"]
+    Proxy --> DB["Local SQLite"]
+    DB --> Dashboard["Dashboard / CLI"]
+```
+
+### Options
+
+```bash
+toolwitness proxy --db /path/to/custom.db -- npx your-server
+toolwitness proxy --session-id my-session -- python my_server.py
+```
+
+---
+
 ## What's Next
 
 - [How It Works](how-it-works.md) — understand the verification engine

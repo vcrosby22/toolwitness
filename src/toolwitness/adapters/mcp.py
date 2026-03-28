@@ -24,6 +24,7 @@ Usage::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import uuid
@@ -36,6 +37,40 @@ from toolwitness.core.types import Classification, VerificationResult
 from toolwitness.storage.base import StorageBackend
 
 logger = logging.getLogger("toolwitness")
+
+
+def _extract_content(result_data: Any) -> Any:
+    """Normalise an MCP result into a value suitable for verification.
+
+    MCP servers may return ``content`` as:
+    - a dict with a ``content`` key holding a list of parts
+    - a dict with a ``content`` key holding a plain dict
+    - a plain dict (no ``content`` key)
+    - a primitive value
+
+    When ``content`` is a list of text parts, merge their ``text``
+    fields into a single string (or parse as JSON if possible).
+    """
+    if not isinstance(result_data, dict):
+        return result_data
+
+    content = result_data.get("content", result_data)
+
+    if isinstance(content, list):
+        texts = [
+            p.get("text", "")
+            for p in content
+            if isinstance(p, dict) and p.get("type") == "text"
+        ]
+        if not texts:
+            return content
+        merged = "\n".join(texts) if len(texts) > 1 else texts[0]
+        try:
+            return json.loads(merged)
+        except (json.JSONDecodeError, TypeError):
+            return merged
+
+    return content
 
 
 class MCPMonitor:
@@ -123,7 +158,6 @@ class MCPMonitor:
 
         parsed_result = result
         if isinstance(result, str):
-            import contextlib
             with contextlib.suppress(json.JSONDecodeError, TypeError):
                 parsed_result = json.loads(result)
 
@@ -136,6 +170,8 @@ class MCPMonitor:
         """Process a raw JSON-RPC message (request or response).
 
         Convenience method for intercepting all messages in a proxy.
+        Handles both successful results and error responses, and
+        normalises MCP ``content`` lists into a single merged dict.
         """
         method = message.get("method")
         if method == "tools/call":
@@ -144,16 +180,31 @@ class MCPMonitor:
             self.on_tool_call(
                 method=method, params=params, request_id=req_id,
             )
-        elif "result" in message and "id" in message:
-            req_id = str(message["id"])
-            if req_id in self._pending_calls:
-                result_data = message["result"]
-                content = result_data
-                if isinstance(result_data, dict):
-                    content = result_data.get("content", result_data)
-                self.on_tool_result(
-                    result=content, request_id=req_id,
-                )
+            return
+
+        msg_id = message.get("id")
+        if msg_id is None:
+            return
+        req_id = str(msg_id)
+
+        if req_id not in self._pending_calls:
+            return
+
+        if "error" in message:
+            error = message["error"]
+            self.on_tool_result(
+                result={"error": error},
+                request_id=req_id,
+                is_error=True,
+            )
+            return
+
+        if "result" in message:
+            result_data = message["result"]
+            content = _extract_content(result_data)
+            self.on_tool_result(
+                result=content, request_id=req_id,
+            )
 
     def verify(self, agent_response: str) -> list[VerificationResult]:
         """Verify the agent's response against recorded tool results."""

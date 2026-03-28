@@ -134,6 +134,53 @@ results = detector.verify_sync("Miami is 72°F.")
 
 ---
 
+## Two Ways to Use ToolWitness
+
+<div class="grid cards" markdown>
+
+-   **SDK — for developers building agents**
+
+    ---
+
+    Building your own AI agent in Python? Add a few lines to your agent loop and every tool call is monitored from that point on.
+
+    Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**. The core verification engine is framework-agnostic — switch providers anytime without changing your ToolWitness integration.
+
+    ```python
+    from toolwitness import ToolWitnessDetector
+    detector = ToolWitnessDetector(storage=SQLiteStorage())
+
+    @detector.tool()
+    def get_weather(city: str) -> dict: ...
+    ```
+
+    [SDK quick start →](getting-started.md)
+
+-   **MCP Proxy — for Cursor, Claude Desktop, and other MCP tools**
+
+    ---
+
+    Using an MCP-compatible tool like **Cursor** or **Claude Desktop**? One config change wraps any MCP server with ToolWitness monitoring. Zero code, zero changes to your agent.
+
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "your-server"]
+        }
+      }
+    }
+    ```
+
+    [MCP Proxy quick start →](getting-started.md#mcp-proxy)
+
+</div>
+
+The same verification engine powers both paths — cryptographic receipts, structural matching, and five-level classification. Whether you write agents or use them, ToolWitness watches the tool boundary.
+
+---
+
 ## Design Principles
 
 - **Fail-open** — ToolWitness errors never block your tool calls

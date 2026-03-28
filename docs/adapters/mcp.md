@@ -8,6 +8,31 @@ Monitor tool calls in Model Context Protocol (MCP) servers by intercepting `tool
 pip install toolwitness[mcp]
 ```
 
+## MCP Proxy (recommended for Cursor / Claude Desktop)
+
+The fastest way to monitor MCP tool calls — one config change, zero code:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "toolwitness",
+      "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
+    }
+  }
+}
+```
+
+The proxy wraps any MCP server transparently. All tool calls are recorded with cryptographic receipts and stored locally. View results with `toolwitness dashboard` or `toolwitness check`.
+
+See the [Getting Started guide](../getting-started.md#mcp-proxy) for full setup instructions.
+
+---
+
+## Programmatic API
+
+For direct integration in your own Python code:
+
 ## Usage
 
 ```python

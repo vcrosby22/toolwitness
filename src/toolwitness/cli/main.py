@@ -292,6 +292,55 @@ def dashboard(ctx: click.Context, host: str, port: int) -> None:
     start_dashboard(str(db_path), host=host, port=port)
 
 
+@cli.command()
+@click.argument("server_command", nargs=-1, required=True)
+@click.option(
+    "--db", default=None,
+    help="SQLite database path (defaults to ~/.toolwitness/toolwitness.db).",
+)
+@click.option(
+    "--session-id", default=None,
+    help="Custom session ID for this proxy run.",
+)
+def proxy(
+    server_command: tuple[str, ...],
+    db: str | None,
+    session_id: str | None,
+) -> None:
+    """Run as a transparent MCP proxy. Monitors all tool calls.
+
+    Wrap any MCP server to record tool calls for the ToolWitness
+    dashboard and CLI.  In your MCP config, replace the server command
+    with ``toolwitness proxy -- <original command>``.
+
+    Example Cursor config (.cursor/mcp.json)::
+
+        {
+          "mcpServers": {
+            "my-server": {
+              "command": "toolwitness",
+              "args": ["proxy", "--", "npx", "-y", "@mcp/server", "/path"]
+            }
+          }
+        }
+    """
+    import asyncio
+
+    from toolwitness.proxy.stdio import run_proxy
+
+    cmd = list(server_command)
+    if not cmd:
+        click.echo("Error: no server command provided.", err=True)
+        raise SystemExit(1)
+
+    click.echo(
+        f"ToolWitness proxy → {' '.join(cmd)}", err=True,
+    )
+
+    exit_code = asyncio.run(run_proxy(cmd, db_path=db, session_id=session_id))
+    raise SystemExit(exit_code)
+
+
 @cli.command(name="export")
 @click.option(
     "--format", "-f", "fmt", default="json",

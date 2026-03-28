@@ -72,6 +72,23 @@ print(verification)
 # [VerificationResult(tool_name='get_weather', classification=VERIFIED, confidence=0.95)]
 ```
 
+### MCP Proxy (Cursor, Claude Desktop, any MCP host)
+
+No code needed — one config change wraps any MCP server:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "toolwitness",
+      "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
+    }
+  }
+}
+```
+
+Every tool call is recorded and available via `toolwitness dashboard` or `toolwitness check`.
+
 ### With OpenAI
 
 ```python
@@ -80,7 +97,7 @@ from toolwitness.adapters.openai import wrap
 from toolwitness.storage.sqlite import SQLiteStorage
 
 client = wrap(OpenAI(), storage=SQLiteStorage())
-# Use client normally — ToolWitness intercepts tool calls transparently
+# wrap() attaches a .toolwitness monitor to your client
 ```
 
 ### With Anthropic
