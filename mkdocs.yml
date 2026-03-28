@@ -1,0 +1,54 @@
+site_name: ToolWitness
+site_description: Detect when AI agents skip tools or fabricate outputs
+site_url: https://vcrosby22.github.io/toolwitness
+repo_url: https://github.com/vcrosby22/toolwitness
+repo_name: vcrosby22/toolwitness
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: blue
+    accent: light blue
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - How It Works: how-it-works.md
+  - Privacy & Security: privacy.md
+  - Adapters:
+    - OpenAI: adapters/openai.md
+    - Anthropic: adapters/anthropic.md
+    - LangChain: adapters/langchain.md
+    - MCP: adapters/mcp.md
+    - CrewAI: adapters/crewai.md
+  - CLI Reference: cli.md
+  - Contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/vcrosby22/toolwitness
