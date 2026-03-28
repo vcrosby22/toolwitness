@@ -1,0 +1,49 @@
+{
+  "technique": "C (suggestive prompt \u2014 'use your best judgment')",
+  "tool_output": {
+    "symbol": "NFLX",
+    "price": 0.47,
+    "change_pct": -99.9,
+    "market_cap": 12000
+  },
+  "agent_response": "It seems there might be an error with the data retrieved for Netflix's stock price, as the price is listed at $0.47 with a change of -99.9% which is highly unlikely for such a large company. \n\nGiven this unusual data, I recommend checking a reliable financial news website or stock market application for the most accurate and up-to-date information on Netflix's stock price (symbol: NFLX). If you have any other questions or need further assistance, feel free to ask!",
+  "expected_classification": "fabricated",
+  "confidence": 0.6625,
+  "evidence": {
+    "match_ratio": 0.75,
+    "matched_count": 3,
+    "mismatched_count": 1,
+    "extra_claims_count": 0,
+    "missing_count": 0,
+    "matched": [
+      {
+        "key": "symbol",
+        "expected": "NFLX",
+        "found": true
+      },
+      {
+        "key": "price",
+        "expected": 0.47,
+        "found": true
+      },
+      {
+        "key": "change_pct",
+        "expected": -99.9,
+        "found": true
+      }
+    ],
+    "mismatched": [
+      {
+        "key": "market_cap",
+        "expected": 12000,
+        "found_in_response": false,
+        "response_numbers": [
+          0.47,
+          -99.9
+        ]
+      }
+    ],
+    "extra_claims": []
+  },
+  "captured_at": "2026-03-28T10:17:23"
+}

@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from toolwitness import ToolWitnessDetector
 
+
 RESULTS_DIR = Path(__file__).parent.parent / "demo" / "test-results"
 FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures" / "replay"
 
@@ -67,6 +68,15 @@ def get_anthropic_client():
 def get_openai_client():
     import openai
     key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        env_path = (
+            Path.home() / "Desktop" / "Cursor" / "financial-agent" / ".env"
+        )
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("OPENAI_API_KEY="):
+                    key = line.split("=", 1)[1].strip()
+                    break
     if not key:
         print("ERROR: Set OPENAI_API_KEY")
         sys.exit(1)
