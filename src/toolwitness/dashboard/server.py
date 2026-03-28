@@ -43,6 +43,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/verifications": self._api_verifications,
             "/api/stats": self._api_stats,
             "/api/sessions": self._api_sessions,
+            "/api/handoffs": self._api_handoffs,
             "/api/health": self._api_health,
             "/api/issue-url": self._api_issue_url,
             "/report": self._page_report,
@@ -129,6 +130,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
         sessions = storage.query_sessions(limit=50)
         storage.close()
         self._send_json({"sessions": sessions})
+
+    def _api_handoffs(self, query: dict[str, list[str]]) -> None:
+        storage = self._open_storage()
+        if not storage:
+            self._send_json({"error": "no database"}, status=404)
+            return
+
+        session_id = query.get("session_id", [None])[0]
+        handoffs = storage.query_handoffs(
+            session_id=session_id, limit=100,
+        )
+        storage.close()
+        self._send_json({"handoffs": handoffs})
 
     def _api_health(self, query: dict[str, list[str]]) -> None:
         storage = self._open_storage()
@@ -324,6 +338,10 @@ a.report-link:hover { text-decoration: underline; }
         </div>
     </div>
     <div class="card" style="margin-bottom:1.5rem">
+        <h2>Agent Sessions</h2>
+        <div id="sessions"></div>
+    </div>
+    <div class="card" style="margin-bottom:1.5rem">
         <h2>Recent Verifications</h2>
         <div id="recent"></div>
     </div>
@@ -341,12 +359,15 @@ async function fetchJSON(url) {
 
 async function loadAll() {
     try {
-        const [vData, sData] = await Promise.all([
+        const [vData, sData, sessData, hoData] = await Promise.all([
             fetchJSON('/api/verifications?limit=200'),
             fetchJSON('/api/stats'),
+            fetchJSON('/api/sessions'),
+            fetchJSON('/api/handoffs'),
         ]);
         renderKPIs(vData.verifications);
         renderBreakdown(vData.verifications);
+        renderSessions(sessData.sessions, hoData.handoffs);
         renderRecent(vData.verifications);
         renderToolStats(sData.tools);
         document.getElementById('status').className = 'status status-ok';
@@ -386,6 +407,59 @@ function renderBreakdown(verifs) {
             '<span class="bar-count">' + n + ' (' + pct.toFixed(0) + '%)</span></div>';
     });
     document.getElementById('breakdown').innerHTML = html;
+}
+
+function renderSessions(sessions, handoffs) {
+    const el = document.getElementById('sessions');
+    if (!sessions || !sessions.length) {
+        el.innerHTML = '<p class="empty">No sessions yet.</p>';
+        return;
+    }
+    const byId = {};
+    sessions.forEach(s => { byId[s.session_id] = s; });
+    const roots = sessions.filter(s => !s.parent_session_id);
+    const children = {};
+    sessions.forEach(s => {
+        if (s.parent_session_id) {
+            if (!children[s.parent_session_id])
+                children[s.parent_session_id] = [];
+            children[s.parent_session_id].push(s);
+        }
+    });
+    let html = '<table><thead><tr><th></th><th>Agent</th>' +
+        '<th>Session</th><th>Started</th></tr></thead><tbody>';
+    function addRow(s, depth) {
+        const indent = depth * 20;
+        const name = s.agent_name || '<span style="color:#475569">—</span>';
+        const arrow = depth > 0 ? '└ ' : '';
+        const ts = new Date(s.started_at * 1000)
+            .toLocaleTimeString();
+        html += '<tr><td style="padding-left:' + indent + 'px">' +
+            arrow + '</td><td><strong>' + name + '</strong></td>' +
+            '<td><code>' + s.session_id.substring(0, 10) +
+            '</code></td><td>' + ts + '</td></tr>';
+        (children[s.session_id] || []).forEach(
+            c => addRow(c, depth + 1));
+    }
+    roots.forEach(r => addRow(r, 0));
+    if (!roots.length) sessions.forEach(s => addRow(s, 0));
+    html += '</tbody></table>';
+    if (handoffs && handoffs.length) {
+        html += '<div style="margin-top:0.75rem;font-size:0.8rem;' +
+            'color:#94a3b8"><strong>Handoffs:</strong> ';
+        handoffs.forEach(h => {
+            const src = (byId[h.source_session_id] || {}).agent_name
+                || h.source_session_id.substring(0, 8);
+            const tgt = (byId[h.target_session_id] || {}).agent_name
+                || h.target_session_id.substring(0, 8);
+            const lbl = h.data_summary
+                ? ' (' + h.data_summary + ')' : '';
+            html += '<span style="margin-right:1rem">' +
+                src + ' → ' + tgt + lbl + '</span>';
+        });
+        html += '</div>';
+    }
+    el.innerHTML = html;
 }
 
 function renderRecent(verifs) {

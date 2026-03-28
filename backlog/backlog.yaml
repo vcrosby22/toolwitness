@@ -658,3 +658,106 @@
   milestone: Week 3
   related: [BUG-01, BUG-02, BUG-03]
   tags: [tests, layer4, false-positives, regression]
+
+# ──────────────────────────────────────────────────
+# EPIC — EP-09 Multi-Agent Support
+# ──────────────────────────────────────────────────
+
+- id: EP-09
+  type: epic
+  title: Multi-Agent & Swarm Support
+  description: >
+    Session hierarchy, handoff tracking, and cross-agent verification
+    so ToolWitness can monitor multi-agent systems and catch data
+    corruption that compounds across agent boundaries.
+  priority: P1
+  status: done
+  milestone: Post-MVP
+  tags: [multi-agent, swarm, handoff, cross-agent]
+
+# ──────────────────────────────────────────────────
+# STORIES — EP-09 Multi-Agent Support
+# ──────────────────────────────────────────────────
+
+- id: ST-90
+  type: story
+  parent: EP-09
+  title: Session hierarchy (agent_name + parent_session_id)
+  description: >
+    Add agent_name and parent_session_id columns to sessions table.
+    Detector API accepts these as constructor params. Dashboard shows
+    agent names and tree-indented session list.
+  priority: P1
+  status: done
+  tags: [multi-agent, data-model, sessions]
+
+- id: ST-91
+  type: story
+  parent: EP-09
+  title: Handoff tracking
+  description: >
+    Handoff dataclass, register_handoff() on detector, handoffs table
+    in SQLite, /api/handoffs endpoint, dashboard handoff arrows.
+  priority: P1
+  status: done
+  tags: [multi-agent, handoff, storage]
+
+- id: ST-92
+  type: story
+  parent: EP-09
+  title: Cross-agent verification (verify_with_handoffs)
+  description: >
+    verify_with_handoffs() traces data provenance through handoffs,
+    runs structural matching of receiving agent's response against
+    originating tool output, produces HandoffVerificationResult with
+    corruption_chain evidence.
+  priority: P1
+  status: done
+  tags: [multi-agent, verification, cross-agent]
+
+- id: ST-93
+  type: story
+  parent: EP-09
+  title: Framework adapter multi-agent support
+  description: >
+    All adapters (OpenAI, Anthropic, LangChain, CrewAI) accept
+    agent_name and parent_session_id for multi-agent wiring.
+  priority: P1
+  status: done
+  tags: [multi-agent, adapters]
+
+- id: ST-94
+  type: story
+  parent: EP-09
+  title: Auto-wiring for CrewAI crews
+  description: >
+    Intercept CrewAI task delegation to auto-register handoffs when
+    a crew passes results between agents. Zero-config for CrewAI users.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  tags: [multi-agent, crewai, auto-wiring]
+
+- id: ST-95
+  type: story
+  parent: EP-09
+  title: Auto-wiring for LangGraph multi-agent graphs
+  description: >
+    Intercept state passed between LangGraph nodes to auto-register
+    handoffs. Each node gets automatic handoff tracking.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  tags: [multi-agent, langgraph, auto-wiring]
+
+- id: ST-96
+  type: story
+  parent: EP-09
+  title: Multi-agent docs page
+  description: >
+    Documentation page explaining multi-agent setup: session hierarchy,
+    handoff registration, cross-agent verification, and dashboard views.
+  priority: P2
+  status: open
+  milestone: Post-MVP
+  tags: [multi-agent, docs]

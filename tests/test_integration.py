@@ -228,3 +228,165 @@ class TestCrossSessionIsolation:
         assert len(v_b) == 1
         assert v_a[0]["session_id"] == "session-A"
         assert v_b[0]["session_id"] == "session-B"
+
+
+class TestMultiAgentSessionHierarchy:
+    """Phase 1: agent_name and parent_session_id on sessions."""
+
+    def test_agent_name_stored(self, storage):
+        d = ToolWitnessDetector(
+            storage=storage, agent_name="researcher",
+        )
+        sessions = storage.query_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["agent_name"] == "researcher"
+
+    def test_parent_child_link(self, storage):
+        parent = ToolWitnessDetector(
+            storage=storage, agent_name="orchestrator",
+        )
+        child = ToolWitnessDetector(
+            storage=storage,
+            agent_name="researcher",
+            parent_session_id=parent.session_id,
+        )
+        sessions = storage.query_sessions()
+        child_row = [
+            s for s in sessions if s["session_id"] == child.session_id
+        ][0]
+        assert child_row["parent_session_id"] == parent.session_id
+        assert child_row["agent_name"] == "researcher"
+
+    def test_session_tree(self, storage):
+        root = ToolWitnessDetector(
+            storage=storage, agent_name="orchestrator",
+        )
+        child_a = ToolWitnessDetector(
+            storage=storage,
+            agent_name="researcher",
+            parent_session_id=root.session_id,
+        )
+        child_b = ToolWitnessDetector(
+            storage=storage,
+            agent_name="writer",
+            parent_session_id=root.session_id,
+        )
+        tree = storage.query_session_tree(root.session_id)
+        ids = {s["session_id"] for s in tree}
+        assert root.session_id in ids
+        assert child_a.session_id in ids
+        assert child_b.session_id in ids
+        assert len(tree) == 3
+
+    def test_detector_properties(self, storage):
+        d = ToolWitnessDetector(
+            storage=storage,
+            agent_name="writer",
+            parent_session_id="parent-123",
+        )
+        assert d.agent_name == "writer"
+        assert d.parent_session_id == "parent-123"
+
+
+class TestHandoffTracking:
+    """Phase 2: handoff registration and persistence."""
+
+    def test_register_handoff(self, storage):
+        src = ToolWitnessDetector(
+            storage=storage, agent_name="orchestrator",
+        )
+        tgt = ToolWitnessDetector(
+            storage=storage,
+            agent_name="researcher",
+            parent_session_id=src.session_id,
+        )
+
+        @src.tool()
+        def get_customer(name: str) -> dict:
+            return {"name": name, "id": 42}
+
+        src.execute_sync("get_customer", {"name": "Jane Doe"})
+        handoff = src.register_handoff(tgt, data="customer record")
+
+        assert handoff is not None
+        assert handoff.source_session_id == src.session_id
+        assert handoff.target_session_id == tgt.session_id
+        assert len(handoff.source_receipt_ids) == 1
+
+        stored = storage.query_handoffs(session_id=src.session_id)
+        assert len(stored) == 1
+        assert stored[0]["data_summary"] == "customer record"
+
+    def test_handoff_without_storage(self):
+        src = ToolWitnessDetector(agent_name="a")
+        tgt = ToolWitnessDetector(agent_name="b")
+        handoff = src.register_handoff(tgt, data="test")
+        assert handoff is not None
+        assert handoff.source_session_id == src.session_id
+
+
+class TestCrossAgentVerification:
+    """Phase 3: verify_with_handoffs detects corruption across agents."""
+
+    def test_faithful_handoff(self, storage):
+        """No corruption — receiving agent reports data accurately."""
+        src = ToolWitnessDetector(
+            storage=storage, agent_name="orchestrator",
+        )
+        tgt = ToolWitnessDetector(
+            storage=storage,
+            agent_name="writer",
+            parent_session_id=src.session_id,
+        )
+
+        @src.tool()
+        def get_customer(name: str) -> dict:
+            return {"name": name, "email": "jane@example.com"}
+
+        src.execute_sync("get_customer", {"name": "Jane Doe"})
+        src.register_handoff(tgt, data="customer record")
+
+        local, handoff_results = tgt.verify_with_handoffs(
+            "The customer is Jane Doe, email jane@example.com.",
+        )
+        assert len(handoff_results) == 0
+
+    def test_corrupted_handoff(self, storage):
+        """Receiving agent misrepresents source tool data."""
+        src = ToolWitnessDetector(
+            storage=storage, agent_name="orchestrator",
+        )
+        tgt = ToolWitnessDetector(
+            storage=storage,
+            agent_name="writer",
+            parent_session_id=src.session_id,
+        )
+
+        @src.tool()
+        def get_customer(name: str) -> dict:
+            return {"name": name, "email": "jane@example.com", "id": 42}
+
+        src.execute_sync("get_customer", {"name": "Jane Doe"})
+        src.register_handoff(tgt, data="customer record")
+
+        local, handoff_results = tgt.verify_with_handoffs(
+            "The customer is John Smith with email john@other.com and id 99.",
+        )
+        assert len(handoff_results) >= 1
+        hr = handoff_results[0]
+        assert hr.source_session_id == src.session_id
+        assert hr.tool_name == "get_customer"
+        assert len(hr.corruption_chain) == 3
+        assert hr.corruption_chain[0]["step"] == "original_tool_output"
+        assert hr.corruption_chain[1]["step"] == "handoff"
+        assert hr.corruption_chain[2]["step"] == "receiving_agent_response"
+
+    def test_summary_includes_agent_info(self, storage):
+        d = ToolWitnessDetector(
+            storage=storage,
+            agent_name="researcher",
+            parent_session_id="parent-1",
+        )
+        s = d.summary()
+        assert s["agent_name"] == "researcher"
+        assert s["parent_session_id"] == "parent-1"

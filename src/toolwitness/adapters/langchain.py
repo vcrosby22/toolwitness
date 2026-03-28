@@ -48,6 +48,8 @@ class ToolWitnessMiddleware:
         on_failure_callback: Callable[[VerificationResult], None] | None = None,
         storage: StorageBackend | None = None,
         session_id: str | None = None,
+        agent_name: str | None = None,
+        parent_session_id: str | None = None,
     ):
         """Initialize the middleware.
 
@@ -57,6 +59,8 @@ class ToolWitnessMiddleware:
             on_failure_callback: Custom callback for "callback" mode.
             storage: Optional storage backend for persistence.
             session_id: Optional session identifier.
+            agent_name: Optional name for this agent in a multi-agent system.
+            parent_session_id: Optional parent session for hierarchy tracking.
         """
         if on_fabrication not in ("log", "raise", "callback"):
             raise ValueError(
@@ -73,9 +77,16 @@ class ToolWitnessMiddleware:
         self._current_args: dict[str, Any] = {}
         self._storage = storage
         self._session_id = session_id or uuid.uuid4().hex[:16]
+        self._agent_name = agent_name
+        self._parent_session_id = parent_session_id
 
         if self._storage:
-            self._storage.save_session(self._session_id, {"adapter": "langchain"})
+            self._storage.save_session(
+                self._session_id,
+                {"adapter": "langchain"},
+                agent_name=agent_name,
+                parent_session_id=parent_session_id,
+            )
 
     @property
     def monitor(self) -> ExecutionMonitor:

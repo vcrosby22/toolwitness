@@ -1,5 +1,9 @@
 """Classification engine — combines receipt verification and structural matching
 into a final Classification with confidence score.
+
+Also provides ``classify_handoff()`` for cross-agent verification: checking
+an agent's response against a tool output that originated in a *different*
+agent's session (passed via handoff).
 """
 
 from __future__ import annotations
@@ -8,6 +12,7 @@ from typing import Any
 
 from toolwitness.core.types import (
     Classification,
+    HandoffVerificationResult,
     ToolExecution,
     VerificationResult,
 )
@@ -159,3 +164,70 @@ def _build_evidence(match: MatchResult) -> dict[str, Any]:
         "mismatched": match.mismatched_values[:5],
         "extra_claims": match.extra_claims[:5],
     }
+
+
+# ------------------------------------------------------------------
+# Cross-agent (handoff) classification
+# ------------------------------------------------------------------
+
+def classify_handoff(
+    tool_name: str,
+    agent_response: str,
+    original_output: Any,
+    source_session_id: str,
+    handoff_id: str,
+) -> HandoffVerificationResult | None:
+    """Check whether *agent_response* faithfully represents data from
+    a tool that ran in a different agent's session.
+
+    Returns None when the structural match shows no corruption (the
+    receiving agent reported the data accurately).
+    """
+    match_result = structural_match(original_output, agent_response)
+
+    mismatched = len(match_result.mismatched_values)
+    missing = len(match_result.missing_values)
+    matched = len(match_result.matched_values)
+    total = matched + mismatched
+
+    if total == 0 and missing == 0:
+        return None
+    if mismatched == 0 and missing == 0:
+        return None
+
+    ratio = matched / total if total > 0 else 0.0
+
+    if ratio >= 0.8 and missing == 0:
+        return None
+
+    classification, confidence = _score(match_result)
+
+    if classification == Classification.VERIFIED:
+        return None
+
+    chain: list[dict[str, Any]] = [
+        {
+            "step": "original_tool_output",
+            "session": source_session_id,
+            "tool": tool_name,
+        },
+        {
+            "step": "handoff",
+            "handoff_id": handoff_id,
+        },
+        {
+            "step": "receiving_agent_response",
+            "mismatched": match_result.mismatched_values[:5],
+            "missing": match_result.missing_values[:5],
+        },
+    ]
+
+    return HandoffVerificationResult(
+        tool_name=tool_name,
+        classification=classification,
+        confidence=confidence,
+        source_session_id=source_session_id,
+        handoff_id=handoff_id,
+        corruption_chain=chain,
+        evidence=_build_evidence(match_result),
+    )

@@ -38,17 +38,34 @@ class CrewAIMonitor:
         self,
         storage: StorageBackend | None = None,
         session_id: str | None = None,
+        agent_name: str | None = None,
+        parent_session_id: str | None = None,
     ) -> None:
         self._monitor = ExecutionMonitor()
         self._storage = storage
         self._session_id = session_id or uuid.uuid4().hex[:16]
+        self._agent_name = agent_name
+        self._parent_session_id = parent_session_id
 
         if self._storage:
-            self._storage.save_session(self._session_id, {"adapter": "crewai"})
+            self._storage.save_session(
+                self._session_id,
+                {"adapter": "crewai"},
+                agent_name=agent_name,
+                parent_session_id=parent_session_id,
+            )
 
     @property
     def monitor(self) -> ExecutionMonitor:
         return self._monitor
+
+    @property
+    def session_id(self) -> str:
+        return self._session_id
+
+    @property
+    def agent_name(self) -> str | None:
+        return self._agent_name
 
     def record(
         self,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from toolwitness.core.types import ToolExecution, VerificationResult
+from toolwitness.core.types import Handoff, ToolExecution, VerificationResult
 
 
 class StorageBackend(ABC):
@@ -20,7 +20,14 @@ class StorageBackend(ABC):
         """Persist a verification result."""
 
     @abstractmethod
-    def save_session(self, session_id: str, metadata: dict[str, Any]) -> None:
+    def save_session(
+        self,
+        session_id: str,
+        metadata: dict[str, Any],
+        *,
+        agent_name: str | None = None,
+        parent_session_id: str | None = None,
+    ) -> None:
         """Persist session-level metadata."""
 
     @abstractmethod
@@ -45,6 +52,30 @@ class StorageBackend(ABC):
     @abstractmethod
     def get_tool_stats(self) -> dict[str, Any]:
         """Aggregate statistics per tool (call count, failure rate, etc.)."""
+
+    def save_handoff(self, handoff: Handoff) -> None:
+        """Persist a handoff record. Override in backends that support it."""
+
+    def query_handoffs(
+        self,
+        *,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Query handoff records. Override in backends that support it."""
+        return []
+
+    def query_session_tree(
+        self, root_session_id: str,
+    ) -> list[dict[str, Any]]:
+        """Get a session and all its descendants. Override in backends."""
+        return []
+
+    def get_execution_by_receipt_id(
+        self, receipt_id: str,
+    ) -> dict[str, Any] | None:
+        """Look up an execution by its receipt ID. Override in backends."""
+        return None
 
     def mark_false_positive(self, verification_id: int, reason: str = "") -> bool:
         """Mark a verification as a false positive. Override in backends that support it."""

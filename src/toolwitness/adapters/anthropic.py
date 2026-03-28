@@ -53,15 +53,24 @@ class AnthropicMonitor:
         self,
         storage: StorageBackend | None = None,
         session_id: str | None = None,
+        agent_name: str | None = None,
+        parent_session_id: str | None = None,
     ) -> None:
         self._monitor = ExecutionMonitor()
         self._pending_tool_uses: list[ToolUseRecord] = []
         self._tool_functions: dict[str, Callable[..., Any]] = {}
         self._storage = storage
         self._session_id = session_id or uuid.uuid4().hex[:16]
+        self._agent_name = agent_name
+        self._parent_session_id = parent_session_id
 
         if self._storage:
-            self._storage.save_session(self._session_id, {"adapter": "anthropic"})
+            self._storage.save_session(
+                self._session_id,
+                {"adapter": "anthropic"},
+                agent_name=agent_name,
+                parent_session_id=parent_session_id,
+            )
 
     @property
     def monitor(self) -> ExecutionMonitor:
@@ -205,6 +214,8 @@ def wrap(
     client: Any,
     storage: StorageBackend | None = None,
     session_id: str | None = None,
+    agent_name: str | None = None,
+    parent_session_id: str | None = None,
 ) -> Any:
     """Wrap an Anthropic client with ToolWitness monitoring.
 
@@ -214,19 +225,15 @@ def wrap(
         client: An Anthropic client instance.
         storage: Optional storage backend for persistence.
         session_id: Optional session identifier.
-
-    Usage::
-
-        from anthropic import Anthropic
-        from toolwitness.adapters.anthropic import wrap
-
-        client = wrap(Anthropic())
-
-        # With persistence:
-        from toolwitness.storage.sqlite import SQLiteStorage
-        client = wrap(Anthropic(), storage=SQLiteStorage())
+        agent_name: Optional name for this agent in a multi-agent system.
+        parent_session_id: Optional parent session for hierarchy tracking.
     """
-    monitor = AnthropicMonitor(storage=storage, session_id=session_id)
+    monitor = AnthropicMonitor(
+        storage=storage,
+        session_id=session_id,
+        agent_name=agent_name,
+        parent_session_id=parent_session_id,
+    )
     client.toolwitness = monitor  # type: ignore[attr-defined]
     return client
 
