@@ -34,6 +34,7 @@ openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.20"]
 langchain = ["langchain-core>=0.1"]
 mcp = ["mcp>=1.0"]
+serve = ["mcp>=1.0"]
 crewai = ["crewai>=0.40"]
 docs = [
     "mkdocs-material>=9.5",

@@ -108,7 +108,7 @@ Every tool interaction gets a classification with a confidence score:
 
 ---
 
-## Two Ways to Use ToolWitness
+## Three Ways to Use ToolWitness
 
 <div class="grid cards" markdown>
 
@@ -138,17 +138,17 @@ Every tool interaction gets a classification with a confidence score:
     # classification=VERIFIED, confidence=0.95
     ```
 
-    Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**. The core verification engine is framework-agnostic — switch providers anytime without changing your ToolWitness integration.
+    Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**.
 
     [SDK quick start →](getting-started.md)
 
--   **MCP Proxy — for Cursor, Claude Desktop, and other MCP tools**
+-   **MCP Proxy — record tool calls**
 
     ---
 
     ### One Config Change, Zero Code
 
-    Using an MCP-compatible tool like **Cursor** or **Claude Desktop**? Wrap any MCP server with ToolWitness monitoring:
+    Wrap any MCP server to record every tool call with cryptographic receipts:
 
     ```json
     {
@@ -161,13 +161,44 @@ Every tool interaction gets a classification with a confidence score:
     }
     ```
 
-    Use `which toolwitness` to find the full path. Every tool call is recorded with cryptographic receipts. View results with `toolwitness executions` or `toolwitness dashboard`.
+    Use `which toolwitness` to find the full path.
 
     [MCP Proxy quick start →](getting-started.md#mcp-proxy)
 
+-   **Verification Bridge — catch fabrication in MCP hosts** :material-new-box:
+
+    ---
+
+    ### Close the Loop
+
+    The proxy records what tools return. The **verification bridge** compares that against what the agent *told you*. Two options:
+
+    **CLI spot-check:**
+
+    ```bash
+    toolwitness verify --text "The file is 6169 bytes"
+    ```
+
+    **Real-time MCP server** — the agent self-verifies:
+
+    ```json
+    {
+      "mcpServers": {
+        "toolwitness": {
+          "command": "/full/path/to/toolwitness",
+          "args": ["serve"]
+        }
+      }
+    }
+    ```
+
+    Pair with a Cursor rule so the agent calls `tw_verify_response` after every tool use.
+
+    [CLI reference →](cli.md#toolwitness-verify)
+
 </div>
 
-The same verification engine powers both paths — cryptographic receipts, structural matching, and five-level classification. Whether you write agents or use them, ToolWitness watches the tool boundary.
+The same verification engine powers all three paths — cryptographic receipts, structural matching, and five-level classification. Whether you write agents or use them, ToolWitness watches the tool boundary.
 
 ---
 

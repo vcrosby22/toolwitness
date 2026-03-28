@@ -103,6 +103,104 @@ Auto-refreshes every 5 seconds.
 
 ---
 
+### `toolwitness verify`
+
+Verify agent text against recent proxy-recorded tool executions. This is the command that **closes the MCP proxy gap** — the proxy records what tools returned (Conversation 1), and this command compares the agent's text (Conversation 2) against those recordings.
+
+```bash
+toolwitness verify --text "The file is 6169 bytes, modified March 27"
+toolwitness verify --file response.txt --since 10
+echo "agent output" | toolwitness verify --file -
+```
+
+Output:
+
+```
+Verified against 2 recent tool execution(s):
+
+  VERIFIED   get_file_info                  confidence=99%
+  FABRICATED get_weather                    confidence=78%
+    ↳ temp_f: expected=72, found_in_response=False
+
+⚠ Failures detected — agent response may not accurately reflect tool outputs.
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--text TEXT` | — | Agent response text to verify |
+| `--file PATH` | — | File containing the response (use `-` for stdin) |
+| `--since MINUTES` | `5` | Look back window for matching executions |
+| `--no-persist` | off | Don't save results to the database |
+
+!!! tip "Pair with the MCP proxy"
+    Run `toolwitness proxy` to record tool calls, then use `toolwitness verify` to check if an agent's response accurately reflects what the tools returned. Results appear on the dashboard alongside other verifications.
+
+---
+
+### `toolwitness serve`
+
+Start the ToolWitness MCP verification server. This exposes `tw_verify_response`, `tw_recent_executions`, and `tw_session_stats` as MCP tools that agents can call to self-check their responses in real time.
+
+```bash
+toolwitness serve                    # Default database
+toolwitness serve --db /path/to.db   # Custom database
+```
+
+Configure in your MCP host alongside the proxy:
+
+=== "Cursor (~/.cursor/mcp.json)"
+
+    ```json
+    {
+      "mcpServers": {
+        "filesystem-monitored": {
+          "command": "/full/path/to/toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
+        },
+        "toolwitness": {
+          "command": "/full/path/to/toolwitness",
+          "args": ["serve"]
+        }
+      }
+    }
+    ```
+
+=== "Claude Desktop"
+
+    ```json
+    {
+      "mcpServers": {
+        "filesystem-monitored": {
+          "command": "/full/path/to/toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
+        },
+        "toolwitness": {
+          "command": "/full/path/to/toolwitness",
+          "args": ["serve"]
+        }
+      }
+    }
+    ```
+
+Pair with a Cursor rule to make verification automatic — see `examples/cursor-rule-verify.md` in the repo.
+
+| Option | Default | Description |
+|---|---|---|
+| `--db PATH` | `~/.toolwitness/toolwitness.db` | SQLite database path |
+
+!!! info "Requires the MCP SDK"
+    Install with `pip install 'toolwitness[serve]'` or `pip install mcp`.
+
+**MCP tools exposed:**
+
+| Tool | Description |
+|---|---|
+| `tw_verify_response` | Verify response text against recent executions. Returns per-tool classifications. |
+| `tw_recent_executions` | List recently recorded tool calls with receipt IDs and output previews. |
+| `tw_session_stats` | Aggregate verification statistics (verified/fabricated/skipped counts). |
+
+---
+
 ### `toolwitness executions`
 
 Show recorded tool executions — especially useful for **MCP Proxy** users whose tool calls are recorded as executions (not verifications).

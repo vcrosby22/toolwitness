@@ -408,6 +408,154 @@ def proxy(
     raise SystemExit(exit_code)
 
 
+@cli.command()
+@click.option(
+    "--text", "-t", "response_text", default=None,
+    help="Agent response text to verify against recent tool executions.",
+)
+@click.option(
+    "--file", "-f", "response_file", default=None,
+    type=click.Path(exists=True),
+    help="File containing the agent response to verify.",
+)
+@click.option(
+    "--since", "-s", "since_minutes", default=5.0, show_default=True,
+    help="Look back window in minutes for matching executions.",
+)
+@click.option(
+    "--no-persist", is_flag=True, default=False,
+    help="Don't save verification results to the database.",
+)
+@click.pass_context
+def verify(
+    ctx: click.Context,
+    response_text: str | None,
+    response_file: str | None,
+    since_minutes: float,
+    no_persist: bool,
+) -> None:
+    """Verify agent text against recent proxy-recorded tool executions.
+
+    Closes the MCP proxy verification gap: the proxy records what tools
+    returned (Conversation 1), and this command compares the agent's text
+    (Conversation 2) against those recordings.
+
+    Examples::
+
+        toolwitness verify --text "The file is 6169 bytes"
+        toolwitness verify --file response.txt --since 10
+        echo "agent said X" | toolwitness verify --file -
+    """
+    if not response_text and not response_file:
+        click.echo("Provide --text or --file with the agent response to verify.")
+        raise SystemExit(1)
+
+    if response_file:
+        if response_file == "-":
+            import sys
+            text = sys.stdin.read()
+        else:
+            text = Path(response_file).read_text()
+    else:
+        text = response_text or ""
+
+    if not text.strip():
+        click.echo("Empty response text — nothing to verify.")
+        return
+
+    config = ctx.obj["config"]
+    storage = _open_storage(config)
+    if storage is None:
+        return
+
+    from toolwitness.verification.bridge import verify_agent_response
+
+    result = verify_agent_response(
+        storage,
+        text,
+        since_minutes=since_minutes,
+        persist=not no_persist,
+    )
+    storage.close()
+
+    if result.executions_checked == 0:
+        click.echo(
+            f"No tool executions found in the last {since_minutes:.0f} minutes. "
+            "Make sure the proxy has recorded tool calls first."
+        )
+        return
+
+    click.echo(
+        f"\nVerified against {result.executions_checked} recent tool execution(s):\n"
+    )
+    for v in result.verifications:
+        cls = v.classification.value
+        color = CLASSIFICATION_COLORS.get(cls, "white")
+        click.echo(
+            f"  {click.style(cls.upper(), fg=color, bold=True):20s} "
+            f"{v.tool_name:30s} "
+            f"confidence={v.confidence:.0%}"
+        )
+        if v.evidence.get("mismatched"):
+            for m in v.evidence["mismatched"][:3]:
+                click.echo(
+                    f"    ↳ {m.get('key', '?')}: "
+                    f"expected={m.get('expected', '?')}, "
+                    f"found_in_response={m.get('found_in_response', '?')}"
+                )
+
+    if result.has_failures:
+        click.echo(
+            click.style(
+                "\n⚠ Failures detected — agent response may not accurately "
+                "reflect tool outputs.",
+                fg="red", bold=True,
+            )
+        )
+    else:
+        click.echo(
+            click.style(
+                "\n✓ All tool outputs verified in agent response.",
+                fg="green",
+            )
+        )
+
+
+@cli.command()
+@click.option(
+    "--db", default=None,
+    help="SQLite database path (defaults to ~/.toolwitness/toolwitness.db).",
+)
+def serve(db: str | None) -> None:
+    """Start the ToolWitness MCP verification server.
+
+    Exposes verification tools via the Model Context Protocol so agents
+    can self-check their responses against proxy-recorded tool executions.
+
+    Configure in Cursor's mcp.json::
+
+        {
+          "mcpServers": {
+            "toolwitness": {
+              "command": "/path/to/toolwitness",
+              "args": ["serve"]
+            }
+          }
+        }
+    """
+    try:
+        from toolwitness.mcp_server.server import run_server
+    except ImportError:
+        click.echo(
+            "MCP SDK required: pip install 'toolwitness[serve]'\n"
+            "Or: pip install mcp",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    run_server(db_path=db)
+
+
 @cli.command(name="export")
 @click.option(
     "--format", "-f", "fmt", default="json",

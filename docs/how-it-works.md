@@ -1,11 +1,12 @@
 # How It Works
 
-ToolWitness verifies agent truthfulness through a four-step pipeline. The same verification engine powers both integration paths — the SDK for developers building agents, and the MCP Proxy for users of Cursor, Claude Desktop, and other MCP tools.
+ToolWitness verifies agent truthfulness through a four-step pipeline. The same verification engine powers all three integration paths — the SDK for developers, the MCP Proxy for recording tool calls, and the Verification Bridge for closing the loop in MCP hosts.
 
 ```mermaid
 graph LR
     SDK["SDK (Python)"] --> Engine["Verification Engine"]
     Proxy["MCP Proxy (config)"] --> Engine
+    Bridge["Verification Bridge"] --> Engine
     Engine --> Exec["Execute + Receipt"]
     Exec --> Verify["Verify"]
     Verify --> Classify["Classify"]
@@ -163,15 +164,32 @@ results = detector.verify_sync("The weather is 85°F.")
 engine.process(results, session_id=detector.session_id)
 ```
 
-### MCP Proxy users
+### MCP Proxy users — the Verification Bridge
 
-The proxy records tool calls but does not run the `verify()` step automatically (it doesn't see the agent's text response — that stays inside the MCP host). To add alerting for proxy-recorded sessions, write a small companion script that reads from the shared SQLite database and fires alerts, or use the CLI gate:
+The proxy records tool calls (Conversation 1) but doesn't see the agent's text response (Conversation 2). The **Verification Bridge** closes this gap with two options:
 
-```bash
-toolwitness check --fail-if "fabricated_count > 0"
+**Option A: Real-time self-verification** — Run `toolwitness serve` as a second MCP server. The agent calls `tw_verify_response` with its response text, and ToolWitness compares it against recent proxy recordings. Pair with a Cursor rule for automatic verification.
+
+```json
+{
+  "mcpServers": {
+    "toolwitness": {
+      "command": "/full/path/to/toolwitness",
+      "args": ["serve"]
+    }
+  }
+}
 ```
 
-Direct proxy alerting support is on the roadmap.
+**Option B: CLI spot-check** — After seeing an agent response, verify it manually:
+
+```bash
+toolwitness verify --text "The file is 6169 bytes, modified March 27"
+```
+
+Both options use the same verification engine and store results in the same database, visible on the dashboard.
+
+For CI-style alerting: `toolwitness check --fail-if "fabricated_count > 0"`
 
 ### YAML configuration
 
