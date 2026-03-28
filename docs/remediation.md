@@ -34,7 +34,7 @@ Each classification type has specific, actionable fixes. ToolWitness shows these
 
 ### 4. Verify the Fix
 
-After applying a fix, re-run your agent and check:
+After applying a fix, re-run your agent (or repeat the action in your MCP host) and check:
 
 ```bash
 toolwitness check --last 5
@@ -115,6 +115,15 @@ if not has_tool_call(response, "get_weather"):
 
 **Effort:** Small code change | **Effectiveness:** High
 
+#### MCP Proxy users
+
+If you're using the MCP Proxy (Cursor, Claude Desktop), you don't control the agent code directly. Your options:
+
+- **Check host model settings** — some MCP hosts let you select the model or adjust temperature. Lower temperature reduces skipping.
+- **Verify the MCP server is healthy** — run the server command directly to confirm it responds. A non-responsive server can look like a skip.
+- **Reduce the number of exposed tools** — hosts are more likely to skip tool calls when many tools are available and the model decides it already "knows" the answer.
+- **Report with evidence** — use `toolwitness check` output to file a bug report with the host application, showing the SKIPPED classification and missing receipt.
+
 ---
 
 ## FABRICATED — Agent Misrepresented Tool Output
@@ -176,6 +185,15 @@ orders_agent = Agent(tools=[get_orders])
 
 **Effort:** Architecture change | **Effectiveness:** High but more effort
 
+#### MCP Proxy users
+
+If you're using the MCP Proxy, you have limited control over how the host agent processes tool results. Your options:
+
+- **Adjust host system prompt** — some MCP hosts (e.g., Cursor rules, Claude Desktop system prompts) let you add faithfulness instructions. Add: "Report exact values from tool outputs."
+- **Reduce tools per session** — expose fewer MCP tools to reduce context pressure. Fabrication increases when the model juggles many tool results.
+- **Use the evidence to evaluate hosts** — if one host consistently fabricates while another doesn't, that's a meaningful signal for host selection. ToolWitness gives you the data to compare.
+- **Report with evidence** — use `toolwitness check` or `toolwitness report --format html` to document fabrication patterns and share them with the host application team.
+
 ---
 
 ## EMBELLISHED — Agent Added Ungrounded Claims
@@ -201,6 +219,10 @@ Only report data that came directly from tool outputs.
 Do not add context, opinions, or suggestions unless
 explicitly asked.
 ```
+
+#### MCP Proxy users
+
+Embellishment guidance is the same regardless of integration path — it depends on your domain, not your tooling. If your MCP host lets you configure system prompts or rules (e.g., Cursor rules files), add faithfulness instructions there. If not, evaluate whether the embellishment is acceptable for your use case.
 
 ---
 

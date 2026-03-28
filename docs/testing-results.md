@@ -144,11 +144,24 @@ python scripts/test_live_fabrication.py --save-fixtures
 
 ---
 
+## MCP Proxy Testing
+
+The MCP Proxy has been tested end-to-end with the `@modelcontextprotocol/server-filesystem` server, confirming that:
+
+- The proxy spawns the real MCP server and forwards all JSON-RPC messages bidirectionally
+- `tools/call` requests and responses are recorded with HMAC-signed cryptographic receipts
+- Tool calls appear in `toolwitness check` and the dashboard
+- The proxy runs fail-open — if ToolWitness recording fails, messages still pass through
+
+Proxy-specific unit tests cover JSON-RPC line parsing, message correlation, and content extraction from MCP response formats.
+
+---
+
 ## Testing Layers
 
 | Layer | What | Status | Cadence |
 |---|---|---|---|
-| 1 | Unit tests + fabrication fixtures (no LLM) | **Done** — 182 tests, 75% coverage | Every commit |
+| 1 | Unit tests + fabrication fixtures (no LLM) | **Done** — 199 tests, 75% coverage | Every commit |
 | 2 | Provoked fabrication (real LLMs) | **Done** — Anthropic + OpenAI | On demand / weekly |
 | 3 | Record/replay | **Done** — `scripts/replay_fixtures.py` | After real sessions |
 | 4 | False-positive corpus | **Done** — 27 cases, 8 known limitations | Regression gate |

@@ -189,12 +189,16 @@ All five adapters accept `agent_name` and `parent_session_id` for multi-agent wi
     )
     ```
 
+!!! info "MCP Proxy"
+    MCP Proxy sessions are single-agent by default. Each proxy instance records tool calls to one session. Multi-agent tracking across multiple proxied MCP servers sharing a single SQLite database (e.g., `--db /shared/path.db`) is on the roadmap — see below.
+
 ---
 
 ## What's coming
 
 - **Auto-wiring for CrewAI crews** — when a crew passes task results between agents, ToolWitness will auto-register handoffs with zero configuration
 - **Auto-wiring for LangGraph graphs** — state passed between graph nodes will get automatic handoff tracking
+- **MCP Proxy multi-agent support** — multiple proxy instances sharing a SQLite database with automatic session linking, so tool calls across different MCP servers in a single host appear as a connected agent tree
 - **Swarm-level dashboard view** — a full agent graph showing all agents, handoffs, and data flow in one visualization
 
 ---

@@ -10,13 +10,14 @@ If we asked you to send your agent's tool inputs, outputs, and responses to our 
 
 ## Why a library, not a service
 
-ToolWitness is a Python package you install and embed in your agent code:
+ToolWitness is a Python package for developers building agents *and* a transparent proxy for anyone using MCP-compatible tools like Cursor or Claude Desktop:
 
 ```bash
-pip install toolwitness
+pip install toolwitness          # SDK: embed in your agent code
+toolwitness proxy -- npx server  # Proxy: wrap any MCP server
 ```
 
-One import, one line to wrap your client, and verification happens locally. We chose this approach deliberately:
+One import for the SDK, or one config change for the proxy — and verification happens locally. We chose this approach deliberately:
 
 **You own your data.** Tool inputs, outputs, and verification results never leave your machine. There's no account to create, no API key to manage, no data retention policy to read. Your agent's behavior is your business.
 
@@ -39,6 +40,7 @@ ToolWitness builds well beyond that premise. Where NabaOS is an academic proof-o
 - **Framework adapters** — `pip install toolwitness`, one line to wrap your OpenAI, Anthropic, LangChain, MCP, or CrewAI client. NabaOS has no installable package or integration layer.
 - **Actionable remediation** — every failure surfaces root-cause analysis and fix suggestions. NabaOS stops at detection.
 - **Developer surfaces** — local dashboard, CLI, HTML reports, CI gating, webhook alerts. NabaOS is a research paper.
+- **Zero-code MCP proxy** — `toolwitness proxy` wraps any MCP server as a config-only change for Cursor, Claude Desktop, and other MCP hosts. NabaOS requires code integration with no alternative.
 
 ## What open source gives you
 

@@ -1,35 +1,59 @@
 # How It Works
 
-ToolWitness verifies agent truthfulness in four steps:
+ToolWitness verifies agent truthfulness through a four-step pipeline. The same verification engine powers both integration paths — the SDK for developers building agents, and the MCP Proxy for users of Cursor, Claude Desktop, and other MCP tools.
 
 ```mermaid
 graph LR
-    A[1. Wrap] --> B[2. Execute]
-    B --> C[3. Verify]
-    C --> D[4. Classify]
+    SDK["SDK (Python)"] --> Engine["Verification Engine"]
+    Proxy["MCP Proxy (config)"] --> Engine
+    Engine --> Exec["Execute + Receipt"]
+    Exec --> Verify["Verify"]
+    Verify --> Classify["Classify"]
 ```
 
 ---
 
-## Step 1: Wrap
+## Step 1: Connect
 
-Add ToolWitness to your agent with a few lines of code. Register your tools with the detector, or use `wrap()` to attach a monitor to your OpenAI/Anthropic client. Then use ToolWitness helpers in your agent loop to execute and verify tool calls.
+=== "SDK — for developers building agents"
 
-```python
-from toolwitness import ToolWitnessDetector
+    Add ToolWitness to your agent with a few lines of code. Register your tools with the detector, or use `wrap()` to attach a monitor to your OpenAI/Anthropic client. Then use ToolWitness helpers in your agent loop to execute and verify tool calls.
 
-detector = ToolWitnessDetector()
+    ```python
+    from toolwitness import ToolWitnessDetector
 
-@detector.tool()
-def get_weather(city: str) -> dict:
-    return {"city": city, "temp_f": 72}
-```
+    detector = ToolWitnessDetector()
 
-Works with five frameworks: [OpenAI](adapters/openai.md), [Anthropic](adapters/anthropic.md), [LangChain](adapters/langchain.md), [MCP](adapters/mcp.md), and [CrewAI](adapters/crewai.md).
+    @detector.tool()
+    def get_weather(city: str) -> dict:
+        return {"city": city, "temp_f": 72}
+    ```
+
+    Works with five frameworks: [OpenAI](adapters/openai.md), [Anthropic](adapters/anthropic.md), [LangChain](adapters/langchain.md), [MCP](adapters/mcp.md), and [CrewAI](adapters/crewai.md).
+
+=== "MCP Proxy — for Cursor, Claude Desktop, and other MCP tools"
+
+    One config change wraps any MCP server with ToolWitness monitoring. Zero code, zero changes to your agent or server.
+
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "your-server"]
+        }
+      }
+    }
+    ```
+
+    The proxy sits between the MCP host and the real server, forwarding all messages and recording tool calls transparently. See [Getting Started > MCP Proxy](getting-started.md#mcp-proxy) for full setup.
 
 ---
 
 ## Step 2: Execute (Cryptographic Receipts)
+
+!!! note "Same engine for SDK and MCP Proxy"
+    Steps 2–4 are identical regardless of how you connected ToolWitness. Whether you registered tools in Python or wrapped an MCP server with the proxy, every tool call gets the same HMAC receipts, structural matching, and classification.
 
 When a tool runs, ToolWitness generates an **HMAC-signed execution receipt**:
 
@@ -138,6 +162,16 @@ If you need full control over when alerts are processed, create the engine separ
 results = detector.verify_sync("The weather is 85°F.")
 engine.process(results, session_id=detector.session_id)
 ```
+
+### MCP Proxy users
+
+The proxy records tool calls but does not run the `verify()` step automatically (it doesn't see the agent's text response — that stays inside the MCP host). To add alerting for proxy-recorded sessions, write a small companion script that reads from the shared SQLite database and fires alerts, or use the CLI gate:
+
+```bash
+toolwitness check --fail-if "fabricated_count > 0"
+```
+
+Direct proxy alerting support is on the roadmap.
 
 ### YAML configuration
 

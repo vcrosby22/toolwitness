@@ -141,6 +141,43 @@ TOOLWITNESS_DB_PATH=demo/toolwitness-demo.db toolwitness dashboard
 
 Open [localhost:8321](http://localhost:8321) to explore the demo data live.
 
+### Try the MCP Proxy
+
+Monitor real tool calls in Cursor or Claude Desktop with zero code:
+
+1. Install ToolWitness and the filesystem MCP server:
+
+    ```bash
+    pip install toolwitness
+    ```
+
+2. Add to your MCP config (`.cursor/mcp.json` or Claude Desktop config):
+
+    ```json
+    {
+      "mcpServers": {
+        "filesystem-monitored": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"]
+        }
+      }
+    }
+    ```
+
+3. Reload the host, use a tool (e.g., ask Cursor to read a file), then check results:
+
+    ```bash
+    toolwitness check --last 5
+    ```
+
+    You'll see tool calls like `read_file`, `list_directory` recorded with HMAC receipts — every interaction your MCP host made through that server.
+
+4. Launch the dashboard to explore visually:
+
+    ```bash
+    toolwitness dashboard
+    ```
+
 ### Run live fabrication tests
 
 ```bash

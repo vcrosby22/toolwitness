@@ -103,6 +103,55 @@ Auto-refreshes every 5 seconds.
 
 ---
 
+### `toolwitness proxy`
+
+Run as a transparent MCP proxy. Wraps any MCP server to record tool calls for the dashboard and CLI — zero code changes.
+
+```bash
+toolwitness proxy -- npx -y @modelcontextprotocol/server-filesystem /path/to/folder
+toolwitness proxy --db /path/to/custom.db -- python my_server.py
+toolwitness proxy --session-id my-session -- npx your-server
+```
+
+The `--` separator is required — everything after it is the real MCP server command.
+
+**Typical usage:** Add to your MCP host config (Cursor, Claude Desktop) so the proxy launches automatically:
+
+=== "Cursor (.cursor/mcp.json)"
+
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
+        }
+      }
+    }
+    ```
+
+=== "Claude Desktop"
+
+    ```json
+    {
+      "mcpServers": {
+        "my-server": {
+          "command": "toolwitness",
+          "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
+        }
+      }
+    }
+    ```
+
+| Option | Default | Description |
+|---|---|---|
+| `--db PATH` | `~/.toolwitness/toolwitness.db` | SQLite database path |
+| `--session-id ID` | auto-generated | Custom session identifier |
+
+All tool calls are recorded with HMAC-signed receipts and stored locally. View results with `toolwitness check`, `toolwitness stats`, or `toolwitness dashboard`.
+
+---
+
 ### `toolwitness export`
 
 Export verification data.

@@ -44,6 +44,7 @@ src/toolwitness/
 ├── storage/        # SQLite backend (abstract base + implementation)
 ├── reporting/      # HTML report generator, remediation cards, about page
 ├── dashboard/      # Local web dashboard server
+├── proxy/          # Transparent stdio proxy for MCP servers
 ├── cli/            # Click-based command-line interface
 └── config.py       # Configuration system (env > YAML > defaults)
 ```
