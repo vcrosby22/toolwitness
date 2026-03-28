@@ -54,6 +54,7 @@ nav:
     - LangChain: adapters/langchain.md
     - MCP: adapters/mcp.md
     - CrewAI: adapters/crewai.md
+  - Alerting Model: alerting-model.md
   - CLI Reference: cli.md
   - Contributing: contributing.md
 
