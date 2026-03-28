@@ -8,6 +8,8 @@ tools actually returned.
 
 > *Stop trusting your agent — get a witness.*
 
+**[Documentation](https://vcrosby22.github.io/toolwitness/)** | **[Getting Started](https://vcrosby22.github.io/toolwitness/getting-started/)** | **[How It Works](https://vcrosby22.github.io/toolwitness/how-it-works/)**
+
 ## What ToolWitness detects
 
 | Classification | What happened | Example |

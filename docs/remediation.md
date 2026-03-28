@@ -212,7 +212,7 @@ The dashboard failure detail page includes action buttons:
 |---|---|
 | **Mark False Positive** | Flags this verification as incorrect. Feeds the false-positive corpus used to improve classification accuracy. |
 | **Create Issue** | Opens a pre-filled GitHub issue with the failure details, classification, and evidence. |
-| **Add to Test Suite** | Saves the failure as a replay fixture for regression testing. |
+| **Add to Test Suite** *(planned)* | Will save the failure as a replay fixture for regression testing. Coming in a future release. |
 
 ---
 

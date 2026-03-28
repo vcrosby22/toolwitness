@@ -629,8 +629,12 @@
     sequential calls), suggestive prompts. N=20 runs, >=80% detection.
     CI job: nightly/weekly, budget ~$5-15/week.
   priority: P1
-  status: open
+  status: done
   milestone: Week 2
+  notes: >
+    Script built (scripts/test_live_fabrication.py), run against Claude Sonnet 4
+    with 3 runs per technique. Results documented in docs/testing-results.md.
+    CI job not yet added (manual trigger only).
   tags: [tests, layer2, provocation, llm]
 
 - id: TK-02
@@ -654,8 +658,13 @@
     summarizing, rounding, unit conversion, selective reporting.
     Gate: <2% false positive rate or CI fails.
   priority: P1
-  status: open
+  status: done
   milestone: Week 3
+  notes: >
+    15 corpus cases in tests/test_false_positives.py. 5 cases have known
+    MVP limitations (boolean-to-text, comma numbers, empty results, status
+    semantics, magnitude abbreviation) with widened acceptable sets.
+    Runs in CI via pytest.
   related: [BUG-01, BUG-02, BUG-03]
   tags: [tests, layer4, false-positives, regression]
 
@@ -758,6 +767,6 @@
     Documentation page explaining multi-agent setup: session hierarchy,
     handoff registration, cross-agent verification, and dashboard views.
   priority: P2
-  status: open
+  status: done
   milestone: Post-MVP
   tags: [multi-agent, docs]

@@ -36,9 +36,13 @@ response = client.messages.create(
 
 ## What happens
 
-1. When Claude requests a tool use, ToolWitness records the call with an HMAC-signed receipt
-2. When you provide the tool result, ToolWitness records the actual output
-3. After Claude's final response, verify its claims against recorded tool outputs
+`wrap()` attaches a `.toolwitness` monitor to your client object. Your existing Anthropic code continues to work unchanged — ToolWitness does not intercept or modify API calls. Instead, you use the monitor to record and verify:
+
+1. **Extract** tool use blocks from Claude's response using `client.toolwitness.extract_tool_calls(response)`
+2. **Execute** each tool through the monitor: `client.toolwitness.execute(name, args, tool_fn)`
+3. **Verify** Claude's final response: `client.toolwitness.verify("agent said...")`
+
+The monitor records HMAC-signed receipts and compares Claude's claims against actual tool outputs.
 
 ## Options
 

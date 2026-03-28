@@ -41,6 +41,7 @@ docs = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
     "hypothesis>=6.0",
     "ruff>=0.4",
     "coverage>=7.0",
@@ -58,6 +59,7 @@ toolwitness = "toolwitness.cli.main:cli"
 
 [project.urls]
 Homepage = "https://github.com/vcrosby22/toolwitness"
+Documentation = "https://vcrosby22.github.io/toolwitness/"
 Repository = "https://github.com/vcrosby22/toolwitness"
 Issues = "https://github.com/vcrosby22/toolwitness/issues"
 
@@ -73,6 +75,18 @@ line-length = 99
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.coverage.run]
+source = ["toolwitness"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+]
+show_missing = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

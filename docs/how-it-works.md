@@ -95,14 +95,35 @@ graph TD
 
 ## Alerting
 
-When ToolWitness detects failures, it can alert you immediately:
+When ToolWitness detects failures, you can alert on them using the built-in alerting engine.
 
 - **Webhook** — POST to any URL
 - **Slack** — formatted messages with classification badges
 - **Callback** — call your own Python function
 - **Log** — structured log entries
 
-Configure rules to control when alerts fire:
+!!! note "Manual wiring required"
+    Alerting is opt-in. The `AlertEngine` does not fire automatically from `ToolWitnessDetector` — you wire it into your application code after verification. This keeps the detector lightweight and avoids side effects during testing.
+
+```python
+from toolwitness.alerting.rules import AlertEngine, AlertRule
+from toolwitness.alerting.channels import SlackChannel
+from toolwitness.core.types import Classification
+
+engine = AlertEngine()
+engine.add_rule(AlertRule(
+    classifications={Classification.FABRICATED, Classification.SKIPPED},
+    min_confidence=0.8,
+    channels=[SlackChannel("https://hooks.slack.com/services/...")],
+))
+
+# After verification, process results through the alert engine
+results = detector.verify_sync("The weather is 85°F.")
+for result in results:
+    engine.process(result)
+```
+
+Or configure via YAML:
 
 ```yaml
 alerting:

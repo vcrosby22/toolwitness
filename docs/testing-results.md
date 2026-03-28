@@ -63,15 +63,32 @@ ToolWitness uses a six-layer testing strategy. This page documents the results f
 
 ---
 
+## Multi-Model Support
+
+The Layer 2 script supports multiple providers:
+
+```bash
+# Anthropic (default)
+python scripts/test_live_fabrication.py --provider anthropic --runs 3
+
+# OpenAI GPT-4o
+python scripts/test_live_fabrication.py --provider openai --runs 3
+
+# Save detected fabrications as replay fixtures for Layer 3
+python scripts/test_live_fabrication.py --save-fixtures
+```
+
+---
+
 ## Testing Layers
 
 | Layer | What | Status | Cadence |
 |---|---|---|---|
-| 1 | Unit tests + fabrication fixtures (no LLM) | **Done** — 161 tests | Every commit |
-| 2 | Provoked fabrication (real LLMs) | **Done** — see above | On demand / weekly |
-| 3 | Record/replay | **Planned** — TK-02 in backlog | After real sessions |
-| 4 | False-positive corpus | **Done** — 15 cases, 5 known limitations | Regression gate |
-| 5 | Performance benchmarks | **Planned** | Per release |
+| 1 | Unit tests + fabrication fixtures (no LLM) | **Done** — 182 tests, 75% coverage | Every commit |
+| 2 | Provoked fabrication (real LLMs) | **Done** — Anthropic + OpenAI | On demand / weekly |
+| 3 | Record/replay | **Done** — `scripts/replay_fixtures.py` | After real sessions |
+| 4 | False-positive corpus | **Done** — 27 cases, 8 known limitations | Regression gate |
+| 5 | Performance benchmarks | **Done** — `scripts/benchmark.py` | Per release |
 | 6 | TWBench public benchmark | **Deferred** | Post-MVP |
 
 ---
@@ -79,14 +96,32 @@ ToolWitness uses a six-layer testing strategy. This page documents the results f
 ## Reproduce the Tests
 
 ```bash
+# Anthropic
 export ANTHROPIC_API_KEY=your-key-here
 python scripts/test_live_fabrication.py --runs 3
+
+# OpenAI
+export OPENAI_API_KEY=your-key-here
+python scripts/test_live_fabrication.py --provider openai --runs 3
 ```
 
 Increase runs for statistical significance:
 
 ```bash
 python scripts/test_live_fabrication.py --runs 20
+```
+
+Save detected fabrications as replay fixtures for Layer 3:
+
+```bash
+python scripts/test_live_fabrication.py --save-fixtures
+python scripts/replay_fixtures.py --verbose
+```
+
+Run performance benchmarks (Layer 5):
+
+```bash
+python scripts/benchmark.py --iterations 500
 ```
 
 Results are saved as JSON in `demo/test-results/`.

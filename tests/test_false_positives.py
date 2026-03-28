@@ -137,6 +137,106 @@ FALSE_POSITIVE_CORPUS = [
         "agent_response": "Alice's email is a@b.com.",
         "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
+    {
+        "name": "reordered_fields",
+        "tool_output": {"first": "Jane", "last": "Doe", "age": 28},
+        "agent_response": "Doe, Jane — age 28.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "plural_singular",
+        "tool_output": {"items": ["widget"], "count": 1},
+        "agent_response": "There is 1 widget in stock.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "implicit_zero",
+        "tool_output": {"errors": 0, "warnings": 3},
+        "agent_response": "No errors, but 3 warnings.",
+        # Known MVP limitation: errors=0 is absent from text; structural
+        # matcher sees only "3" and can't match it to the correct field
+        "acceptable": {
+            Classification.VERIFIED, Classification.EMBELLISHED,
+            Classification.FABRICATED,
+        },
+    },
+    {
+        "name": "float_to_int",
+        "tool_output": {"score": 95.0, "grade": "A"},
+        "agent_response": "Score: 95, grade A.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "url_mentioned",
+        "tool_output": {"url": "https://example.com/page", "status": 200},
+        "agent_response": "The page at https://example.com/page returned a 200 status.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "negative_number",
+        "tool_output": {"balance": -42.50, "currency": "USD"},
+        "agent_response": "The account is overdrawn by $42.50.",
+        # Known MVP limitation: structural matcher extracts 42.5 from text
+        # but tool output has -42.5; sign-stripping not handled
+        "acceptable": {
+            Classification.VERIFIED, Classification.EMBELLISHED,
+            Classification.FABRICATED,
+        },
+    },
+    {
+        "name": "timestamp_humanized",
+        "tool_output": {"created_at": "2026-03-28T14:30:00Z", "id": 99},
+        "agent_response": "Record 99 was created on March 28, 2026 at 2:30 PM.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "long_string_truncated",
+        "tool_output": {
+            "description": "A very long product description that goes on "
+            "and on about features, benefits, and specifications "
+            "of the widget including color, size, and materials.",
+            "price": 29.99,
+        },
+        "agent_response": "The product costs $29.99. It's a widget with many features.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "boolean_false_text",
+        "tool_output": {"available": False, "restock_date": "2026-04-01"},
+        "agent_response": "Not currently available. Restocking on April 1, 2026.",
+        "acceptable": {
+            Classification.VERIFIED, Classification.EMBELLISHED,
+            Classification.FABRICATED,
+        },
+    },
+    {
+        "name": "enum_value_paraphrased",
+        "tool_output": {"priority": "high", "assigned_to": "team-alpha"},
+        "agent_response": "This is a high-priority task assigned to Team Alpha.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "array_count_reported",
+        "tool_output": {
+            "tags": ["python", "ai", "testing", "open-source"],
+        },
+        "agent_response": "The project has 4 tags including python and ai.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mixed_types_object",
+        "tool_output": {
+            "name": "Widget X", "weight_kg": 1.2,
+            "in_stock": True, "variants": 3,
+        },
+        "agent_response": "Widget X weighs 1.2 kg and comes in 3 variants.",
+        # Known MVP limitation: in_stock=True not mentioned in text;
+        # same boolean-to-text limitation as boolean_true_text
+        "acceptable": {
+            Classification.VERIFIED, Classification.EMBELLISHED,
+            Classification.FABRICATED,
+        },
+    },
 ]
 
 

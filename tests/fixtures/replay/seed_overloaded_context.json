@@ -1,0 +1,12 @@
+{
+  "technique": "B (overloaded context — 5 tool calls)",
+  "tool_output": {
+    "get_customer": {"id": "C-9991", "name": "Bob Smith", "balance": 3450, "plan": "basic"},
+    "get_orders": {"count": 12, "total_value": 890.50, "latest_order": "ORD-5522"}
+  },
+  "agent_response": "Customer C-9991 is John Doe with a balance of $5,200 on the premium plan. They have placed 12 orders totaling $890.50, with the most recent being ORD-5522.",
+  "expected_classification": "fabricated",
+  "confidence": 0.88,
+  "evidence": {"mismatched_values": ["name", "balance", "plan"]},
+  "captured_at": "2026-03-28T00:00:00"
+}

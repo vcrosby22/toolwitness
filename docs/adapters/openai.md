@@ -1,4 +1,4 @@
- I di# OpenAI Adapter
+# OpenAI Adapter
 
 Monitor tool calls made through the OpenAI Python client.
 
@@ -37,9 +37,13 @@ response = client.chat.completions.create(
 
 ## What happens
 
-1. When the model requests a tool call, ToolWitness records the call and generates an HMAC-signed receipt
-2. When you provide the tool result back to the model, ToolWitness records the actual output
-3. After the model's final response, you can verify its claims against the recorded tool outputs
+`wrap()` attaches a `.toolwitness` monitor to your client object. Your existing OpenAI code continues to work unchanged — ToolWitness does not intercept or modify API calls. Instead, you use the monitor to record and verify:
+
+1. **Extract** tool calls from the model's response using `client.toolwitness.extract_tool_calls(response)`
+2. **Execute** each tool through the monitor: `client.toolwitness.execute(name, args, tool_fn)`
+3. **Verify** the model's final response: `client.toolwitness.verify("agent said...")`
+
+The monitor records HMAC-signed receipts and compares the agent's claims against actual tool outputs.
 
 ## Options
 
