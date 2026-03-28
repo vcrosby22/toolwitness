@@ -151,6 +151,69 @@ def stats(ctx: click.Context) -> None:
 
 @cli.command()
 @click.option(
+    "--last", "-n", default=10, show_default=True,
+    help="Number of recent executions to show.",
+)
+@click.option(
+    "--tool", "-t", default=None,
+    help="Filter by tool name.",
+)
+@click.option(
+    "--session", "-s", default=None,
+    help="Filter by session ID.",
+)
+@click.pass_context
+def executions(
+    ctx: click.Context,
+    last: int,
+    tool: str | None,
+    session: str | None,
+) -> None:
+    """Show recorded tool executions (useful for MCP Proxy users).
+
+    The proxy records tool calls to the executions table. Unlike
+    ``toolwitness check`` (which shows verifications), this command
+    shows raw tool calls with their receipts — what the tool was
+    asked and what it returned.
+    """
+    config = ctx.obj["config"]
+    storage = _open_storage(config)
+    if storage is None:
+        return
+
+    results = storage.query_executions(
+        session_id=session, tool_name=tool, limit=last,
+    )
+    storage.close()
+
+    if not results:
+        click.echo("No executions recorded yet.")
+        return
+
+    for row in results:
+        tool_name = row.get("tool_name", "unknown")
+        receipt_id = row.get("receipt_id", "—")[:12]
+        error = row.get("error")
+        ts = time.strftime(
+            "%H:%M:%S", time.localtime(row.get("timestamp", 0)),
+        )
+        sid = row.get("session_id", "")[:10]
+
+        if error:
+            status = click.style("ERROR", fg="red", bold=True)
+        else:
+            status = click.style("RECORDED", fg="green", bold=True)
+
+        click.echo(
+            f"  {ts} {status:20s} "
+            f"{tool_name:30s} "
+            f"receipt={receipt_id}…  "
+            f"session={sid}"
+        )
+
+
+@cli.command()
+@click.option(
     "--interval", "-i", default=2.0, show_default=True,
     help="Poll interval in seconds.",
 )

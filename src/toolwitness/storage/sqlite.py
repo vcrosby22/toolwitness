@@ -326,6 +326,52 @@ class SQLiteStorage(StorageBackend):
             stats[name] = row_dict
         return stats
 
+    def query_executions(
+        self,
+        *,
+        session_id: str | None = None,
+        tool_name: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM executions WHERE 1=1"
+        params: list[Any] = []
+
+        if session_id:
+            query += " AND session_id = ?"
+            params.append(session_id)
+        if tool_name:
+            query += " AND tool_name = ?"
+            params.append(tool_name)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = self._conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_execution_stats(self) -> dict[str, Any]:
+        cursor = self._conn.execute("""
+            SELECT
+                tool_name,
+                COUNT(*) as total,
+                SUM(CASE WHEN error IS NOT NULL AND error != ''
+                    THEN 1 ELSE 0 END) as errors,
+                AVG(duration_ms) as avg_duration_ms
+            FROM executions
+            GROUP BY tool_name
+            ORDER BY total DESC
+        """)
+        stats: dict[str, Any] = {}
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            name = row_dict.pop("tool_name")
+            total = row_dict["total"]
+            row_dict["error_rate"] = (
+                row_dict["errors"] / total if total > 0 else 0.0
+            )
+            stats[name] = row_dict
+        return stats
+
     def save_handoff(self, handoff: Handoff) -> None:
         self._conn.execute(
             """INSERT INTO handoffs

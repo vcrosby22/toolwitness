@@ -145,29 +145,32 @@ Open [localhost:8321](http://localhost:8321) to explore the demo data live.
 
 Monitor real tool calls in Cursor or Claude Desktop with zero code:
 
-1. Install ToolWitness and the filesystem MCP server:
+1. Install ToolWitness and find the full binary path:
 
     ```bash
     pip install toolwitness
+    which toolwitness   # e.g. /opt/anaconda3/bin/toolwitness
     ```
 
-2. Add to your MCP config (`.cursor/mcp.json` or Claude Desktop config):
+2. Add to your **global** MCP config (`~/.cursor/mcp.json` for Cursor, or Claude Desktop config):
 
     ```json
     {
       "mcpServers": {
         "filesystem-monitored": {
-          "command": "toolwitness",
+          "command": "/full/path/to/toolwitness",
           "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"]
         }
       }
     }
     ```
 
-3. Reload the host, use a tool (e.g., ask Cursor to read a file), then check results:
+    Replace `/full/path/to/toolwitness` with the output from `which toolwitness`. MCP hosts don't inherit your shell's PATH.
+
+3. **Reload Cursor** (Cmd+Shift+P → "Developer: Reload Window"), use a tool (e.g., ask Cursor to read a file), then check results:
 
     ```bash
-    toolwitness check --last 5
+    toolwitness executions --last 5
     ```
 
     You'll see tool calls like `read_file`, `list_directory` recorded with HMAC receipts — every interaction your MCP host made through that server.

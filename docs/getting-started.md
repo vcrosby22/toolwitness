@@ -228,15 +228,27 @@ If you use **Cursor**, **Claude Desktop**, or any MCP-compatible host, you can m
 
 ### Setup
 
-In your MCP config file, replace the server command with `toolwitness proxy --`:
+**Step 1: Find your toolwitness path**
 
-=== "Cursor (.cursor/mcp.json)"
+MCP hosts like Cursor don't inherit your shell's `PATH`, so you need the full path to the `toolwitness` binary:
+
+```bash
+which toolwitness
+# Example output: /opt/anaconda3/bin/toolwitness
+```
+
+**Step 2: Add to your MCP config**
+
+!!! tip "Use the global config"
+    For **Cursor**, add the server to the **global** config at **`~/.cursor/mcp.json`** (not the project-level `.cursor/mcp.json`). Project-level configs may not load reliably in all Cursor versions.
+
+=== "Cursor (~/.cursor/mcp.json)"
 
     ```json
     {
       "mcpServers": {
         "my-server": {
-          "command": "toolwitness",
+          "command": "/full/path/to/toolwitness",
           "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"]
         }
       }
@@ -249,22 +261,28 @@ In your MCP config file, replace the server command with `toolwitness proxy --`:
     {
       "mcpServers": {
         "my-server": {
-          "command": "toolwitness",
+          "command": "/full/path/to/toolwitness",
           "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"]
         }
       }
     }
     ```
 
-That's it. Every tool call through that MCP server is now recorded with cryptographic receipts and stored in your local SQLite database.
+Replace `/full/path/to/toolwitness` with the output from `which toolwitness`.
+
+**Step 3: Reload your MCP host**
+
+In Cursor: **Cmd+Shift+P** → "Developer: Reload Window". Every tool call through that server is now recorded with cryptographic receipts.
 
 ### View results
 
 ```bash
-toolwitness check --last 10     # Recent verifications
-toolwitness stats               # Per-tool failure rates
-toolwitness dashboard           # Local web dashboard at localhost:8321
+toolwitness executions --last 10  # Recent proxy tool calls with receipts
+toolwitness dashboard             # Local web dashboard at localhost:8321
 ```
+
+!!! note "Executions vs verifications"
+    The proxy records **executions** (what tools were called and what they returned). Use `toolwitness executions` to see these. The `toolwitness check` command shows **verifications** (classifications like VERIFIED/FABRICATED) which require the SDK path where the agent's response text is available for comparison.
 
 ### How it works
 

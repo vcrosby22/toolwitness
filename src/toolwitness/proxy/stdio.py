@@ -72,7 +72,11 @@ async def run_proxy(
     Returns the subprocess exit code.
     """
     storage = SQLiteStorage(db_path) if db_path else SQLiteStorage()
-    monitor = MCPMonitor(storage=storage, session_id=session_id)
+    monitor = MCPMonitor(
+        storage=storage,
+        session_id=session_id,
+        metadata={"server_command": " ".join(server_command)},
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *server_command,

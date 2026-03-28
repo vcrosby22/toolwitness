@@ -41,6 +41,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/": self._page_overview,
             "/about": self._page_about,
             "/api/verifications": self._api_verifications,
+            "/api/executions": self._api_executions,
             "/api/stats": self._api_stats,
             "/api/sessions": self._api_sessions,
             "/api/handoffs": self._api_handoffs,
@@ -110,6 +111,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         )
         storage.close()
         self._send_json({"verifications": results, "total": len(results)})
+
+    def _api_executions(self, query: dict[str, list[str]]) -> None:
+        storage = self._open_storage()
+        if not storage:
+            self._send_json({"error": "no database"}, status=404)
+            return
+
+        limit = int(query.get("limit", ["50"])[0])
+        session_id = query.get("session_id", [None])[0]
+        tool_name = query.get("tool", [None])[0]
+        results = storage.query_executions(
+            session_id=session_id, tool_name=tool_name, limit=limit,
+        )
+        storage.close()
+        self._send_json({"executions": results, "total": len(results)})
 
     def _api_stats(self, query: dict[str, list[str]]) -> None:
         storage = self._open_storage()
@@ -345,6 +361,10 @@ a.report-link:hover { text-decoration: underline; }
         <h2>Recent Verifications</h2>
         <div id="recent"></div>
     </div>
+    <div class="card" style="margin-bottom:1.5rem">
+        <h2>Tool Executions (Proxy)</h2>
+        <div id="executions"></div>
+    </div>
 </main>
 <script>
 const COLORS = {
@@ -359,17 +379,19 @@ async function fetchJSON(url) {
 
 async function loadAll() {
     try {
-        const [vData, sData, sessData, hoData] = await Promise.all([
+        const [vData, sData, sessData, hoData, exData] = await Promise.all([
             fetchJSON('/api/verifications?limit=200'),
             fetchJSON('/api/stats'),
             fetchJSON('/api/sessions'),
             fetchJSON('/api/handoffs'),
+            fetchJSON('/api/executions?limit=50'),
         ]);
         renderKPIs(vData.verifications);
         renderBreakdown(vData.verifications);
         renderSessions(sessData.sessions, hoData.handoffs);
         renderRecent(vData.verifications);
         renderToolStats(sData.tools);
+        renderExecutions(exData.executions);
         document.getElementById('status').className = 'status status-ok';
         document.getElementById('status').textContent = 'connected';
     } catch (e) {
@@ -534,6 +556,33 @@ function renderToolStats(tools) {
             '<td>' + (data.total || 0) + '</td>' +
             '<td style="color:' + color + ';font-weight:600">' +
             (rate * 100).toFixed(1) + '%</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+function renderExecutions(execs) {
+    const el = document.getElementById('executions');
+    if (!execs || !execs.length) {
+        el.innerHTML = '<p class="empty">No proxy executions yet. ' +
+            'Set up <code>toolwitness proxy</code> in your MCP config to see tool calls here.</p>';
+        return;
+    }
+    let html = '<table><thead><tr><th>Time</th><th>Tool</th>' +
+        '<th>Receipt</th><th>Session</th><th>Status</th></tr></thead><tbody>';
+    execs.slice(0, 30).forEach(e => {
+        const ts = new Date((e.timestamp || 0) * 1000).toLocaleTimeString();
+        const hasError = e.error && e.error !== 'null' && e.error !== '';
+        const statusHtml = hasError
+            ? '<span class="badge" style="background:#dc2626">ERROR</span>'
+            : '<span class="badge" style="background:#16a34a">OK</span>';
+        const rid = (e.receipt_id || '—').substring(0, 12);
+        const sid = (e.session_id || '').substring(0, 10);
+        html += '<tr><td>' + ts + '</td>' +
+            '<td><code>' + (e.tool_name || '') + '</code></td>' +
+            '<td><code style="font-size:0.7rem">' + rid + '</code></td>' +
+            '<td><code style="font-size:0.7rem">' + sid + '</code></td>' +
+            '<td>' + statusHtml + '</td></tr>';
     });
     html += '</tbody></table>';
     el.innerHTML = html;

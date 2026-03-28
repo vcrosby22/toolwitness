@@ -154,14 +154,14 @@ Every tool interaction gets a classification with a confidence score:
     {
       "mcpServers": {
         "my-server": {
-          "command": "toolwitness",
+          "command": "/full/path/to/toolwitness",
           "args": ["proxy", "--", "npx", "your-server"]
         }
       }
     }
     ```
 
-    Every tool call is recorded with cryptographic receipts. View results with `toolwitness dashboard` or `toolwitness check`.
+    Use `which toolwitness` to find the full path. Every tool call is recorded with cryptographic receipts. View results with `toolwitness executions` or `toolwitness dashboard`.
 
     [MCP Proxy quick start →](getting-started.md#mcp-proxy)
 

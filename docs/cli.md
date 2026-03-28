@@ -103,6 +103,36 @@ Auto-refreshes every 5 seconds.
 
 ---
 
+### `toolwitness executions`
+
+Show recorded tool executions — especially useful for **MCP Proxy** users whose tool calls are recorded as executions (not verifications).
+
+```bash
+toolwitness executions                    # Last 10 executions
+toolwitness executions --last 20          # Last 20 executions
+toolwitness executions --tool read_file   # Filter by tool name
+toolwitness executions --session abc123   # Filter by session ID
+```
+
+Output:
+
+```
+  12:34:56 RECORDED   read_file                      receipt=2e7614db-d6a…  session=e65c6897b7
+  12:34:55 RECORDED   list_directory                  receipt=cbb6612c-7a6…  session=e65c6897b7
+  12:34:54 ERROR      read_file                       receipt=b94328c7-4ba…  session=e65c6897b7
+```
+
+| Option | Description |
+|---|---|
+| `--last N` | Show the last N executions (default: 10) |
+| `--tool NAME` | Filter by tool name |
+| `--session ID` | Filter by session ID |
+
+!!! tip "Executions vs verifications"
+    `toolwitness check` shows **verifications** (VERIFIED, FABRICATED, etc.) from the SDK path. `toolwitness executions` shows **raw tool calls** with receipts — this is what the MCP Proxy records. Both are viewable in the dashboard.
+
+---
+
 ### `toolwitness proxy`
 
 Run as a transparent MCP proxy. Wraps any MCP server to record tool calls for the dashboard and CLI — zero code changes.
@@ -115,15 +145,21 @@ toolwitness proxy --session-id my-session -- npx your-server
 
 The `--` separator is required — everything after it is the real MCP server command.
 
-**Typical usage:** Add to your MCP host config (Cursor, Claude Desktop) so the proxy launches automatically:
+**Typical usage:** Add to your MCP host config (Cursor, Claude Desktop) so the proxy launches automatically.
 
-=== "Cursor (.cursor/mcp.json)"
+!!! warning "Use the full path to toolwitness"
+    MCP hosts don't inherit your shell's `PATH`. Use `which toolwitness` to find the full path, then use that in your config.
+
+!!! tip "Cursor: use the global config"
+    Add the server to **`~/.cursor/mcp.json`** (global), not the project-level `.cursor/mcp.json`. Project-level configs may not load reliably in all Cursor versions. After editing, reload: **Cmd+Shift+P** → "Developer: Reload Window".
+
+=== "Cursor (~/.cursor/mcp.json)"
 
     ```json
     {
       "mcpServers": {
         "my-server": {
-          "command": "toolwitness",
+          "command": "/full/path/to/toolwitness",
           "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
         }
       }
@@ -136,7 +172,7 @@ The `--` separator is required — everything after it is the real MCP server co
     {
       "mcpServers": {
         "my-server": {
-          "command": "toolwitness",
+          "command": "/full/path/to/toolwitness",
           "args": ["proxy", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path"]
         }
       }
@@ -148,7 +184,7 @@ The `--` separator is required — everything after it is the real MCP server co
 | `--db PATH` | `~/.toolwitness/toolwitness.db` | SQLite database path |
 | `--session-id ID` | auto-generated | Custom session identifier |
 
-All tool calls are recorded with HMAC-signed receipts and stored locally. View results with `toolwitness check`, `toolwitness stats`, or `toolwitness dashboard`.
+All tool calls are recorded with HMAC-signed receipts and stored locally. View results with `toolwitness executions`, `toolwitness dashboard`, or the `/api/executions` endpoint.
 
 ---
 

@@ -85,14 +85,19 @@ class MCPMonitor:
         self,
         storage: StorageBackend | None = None,
         session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self._monitor = ExecutionMonitor()
         self._storage = storage
         self._session_id = session_id or uuid.uuid4().hex[:16]
         self._pending_calls: dict[str, dict[str, Any]] = {}
 
+        session_meta: dict[str, Any] = {"adapter": "mcp"}
+        if metadata:
+            session_meta.update(metadata)
+
         if self._storage:
-            self._storage.save_session(self._session_id, {"adapter": "mcp"})
+            self._storage.save_session(self._session_id, session_meta)
 
     @property
     def monitor(self) -> ExecutionMonitor:
