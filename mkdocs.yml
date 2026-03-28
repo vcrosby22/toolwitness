@@ -39,6 +39,7 @@ nav:
   - Getting Started: getting-started.md
   - How It Works: how-it-works.md
   - Privacy & Security: privacy.md
+  - Why Open Source: why-open-source.md
   - Adapters:
     - OpenAI: adapters/openai.md
     - Anthropic: adapters/anthropic.md
