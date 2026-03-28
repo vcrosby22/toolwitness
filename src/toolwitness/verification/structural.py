@@ -97,6 +97,123 @@ def _extract_json_from_text(text: str) -> list[dict[str, Any]]:
     return results
 
 
+_LONG_TEXT_THRESHOLD = 500
+
+
+def text_grounding_match(
+    source_text: str,
+    agent_response: str,
+) -> MatchResult:
+    """Check if claims in *agent_response* are grounded in *source_text*.
+
+    Reverses the comparison direction of ``structural_match``: instead of
+    asking "are tool output values present in the response?", this asks
+    "are the response's specific claims supported by the source text?"
+
+    Used for large text outputs (file contents, long descriptions) where
+    agents summarise rather than echo the full output.
+    """
+    result = MatchResult()
+    source_lower = source_text.lower()
+
+    # --- 1. Quoted phrases: strongest signal of a specific claim ---
+    quoted = re.findall(
+        r"""['"\u2018\u2019\u201c\u201d]"""
+        r"""([^'"\u2018\u2019\u201c\u201d]{3,}?)"""
+        r"""['"\u2018\u2019\u201c\u201d]""",
+        agent_response,
+    )
+    for phrase in quoted:
+        phrase_clean = phrase.strip().lower()
+        if len(phrase_clean) < 3:
+            continue
+        if phrase_clean in source_lower:
+            result.matched_values.append(
+                {"key": "quoted", "expected": phrase.strip(), "found": True}
+            )
+        else:
+            result.mismatched_values.append(
+                {"key": "quoted", "expected": phrase.strip(), "found_in_response": False}
+            )
+
+    # --- 2. Dates: YYYY-MM-DD, "Month DD YYYY", or "Month YYYY" ---
+    date_patterns = re.findall(
+        r"\d{4}-\d{2}-\d{2}|"
+        r"(?:January|February|March|April|May|June|July|August|"
+        r"September|October|November|December)"
+        r"(?:\s+\d{1,2}[\s,]+\d{4}|\s+\d{4})",
+        agent_response,
+        re.IGNORECASE,
+    )
+    for date_str in date_patterns:
+        if date_str.lower() in source_lower:
+            result.matched_values.append(
+                {"key": "date", "expected": date_str, "found": True}
+            )
+        else:
+            result.mismatched_values.append(
+                {"key": "date", "expected": date_str, "found_in_response": False}
+            )
+
+    # --- 3. Numbers: exact match for large ints (dates, counts) ---
+    response_numbers = _extract_numbers(agent_response)
+    source_number_set = set(_extract_numbers(source_text))
+    for num in response_numbers:
+        if abs(num) < 2:
+            continue
+        if num >= 100:
+            if num in source_number_set:
+                result.matched_values.append(
+                    {"key": "number", "expected": num, "found": True}
+                )
+            else:
+                result.mismatched_values.append(
+                    {"key": "number", "expected": num, "found_in_response": False}
+                )
+        else:
+            if any(_numeric_close(num, sn) for sn in source_number_set):
+                result.matched_values.append(
+                    {"key": "number", "expected": num, "found": True}
+                )
+
+    # --- 4. Acronyms (2-5 uppercase letters) ---
+    acronyms = set(re.findall(r"\b[A-Z]{2,5}\b", agent_response))
+    _COMMON_ACRONYMS = {"THE", "AND", "NOT", "FOR", "BUT", "ARE", "WAS"}
+    for acr in acronyms - _COMMON_ACRONYMS:
+        if acr.lower() in source_lower or acr in source_text:
+            result.matched_values.append(
+                {"key": "acronym", "expected": acr, "found": True}
+            )
+        else:
+            result.mismatched_values.append(
+                {"key": "acronym", "expected": acr, "found_in_response": False}
+            )
+
+    # --- 5. Distinctive content words ---
+    response_lower_text = agent_response.lower()
+    response_words = set(re.findall(r"\b[a-zA-Z]{4,}\b", response_lower_text))
+    source_words = set(re.findall(r"\b[a-zA-Z]{4,}\b", source_lower))
+    _STOP = {
+        "that", "this", "with", "from", "they", "were", "been", "have",
+        "will", "would", "could", "should", "about", "which", "their",
+        "there", "when", "what", "some", "also", "each", "into", "more",
+        "than", "then", "them", "does", "just", "very", "only", "said",
+        "file", "read", "true", "false", "last", "first", "created",
+        "contains", "document", "emphasizes", "focuses", "primarily",
+        "guiding", "principles",
+    }
+    content_words = response_words - _STOP
+    grounded = content_words & source_words
+    ungrounded = content_words - source_words
+    if content_words:
+        grounding_ratio = len(grounded) / len(content_words)
+        if grounding_ratio < 0.5 and len(ungrounded) >= 3:
+            for word in sorted(ungrounded)[:5]:
+                result.missing_values.append(word)
+
+    return result
+
+
 def structural_match(
     tool_output: Any,
     agent_response: str,

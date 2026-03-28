@@ -23,7 +23,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from toolwitness.core.classifier import classify
+from toolwitness.core.classifier import classify, _score, _build_evidence
 from toolwitness.core.types import (
     Classification,
     ExecutionReceipt,
@@ -31,6 +31,10 @@ from toolwitness.core.types import (
     VerificationResult,
 )
 from toolwitness.storage.sqlite import SQLiteStorage
+from toolwitness.verification.structural import (
+    _LONG_TEXT_THRESHOLD,
+    text_grounding_match,
+)
 
 
 @dataclass
@@ -170,6 +174,42 @@ def hydrate_execution(row: dict[str, Any]) -> ToolExecution | None:
     return None
 
 
+def _verify_single(
+    tool_name: str,
+    execution: ToolExecution,
+    response_text: str,
+) -> VerificationResult:
+    """Classify a single tool execution against the agent's response.
+
+    For structured outputs (dicts, short values) the standard classifier
+    runs.  For long text outputs (file contents, large responses) we use
+    text-grounding — checking whether the agent's claims are supported
+    by the source rather than whether the source is echoed verbatim.
+    """
+    output = execution.output
+    use_grounding = isinstance(output, str) and len(output) >= _LONG_TEXT_THRESHOLD
+
+    if not use_grounding:
+        return classify(
+            tool_name=tool_name,
+            agent_response=response_text,
+            execution=execution,
+            receipt_valid=None,
+        )
+
+    match_result = text_grounding_match(output, response_text)
+    classification, confidence = _score(match_result)
+    evidence = _build_evidence(match_result)
+
+    return VerificationResult(
+        tool_name=tool_name,
+        classification=classification,
+        confidence=confidence,
+        evidence=evidence,
+        receipt=execution.receipt,
+    )
+
+
 def verify_agent_response(
     storage: SQLiteStorage,
     response_text: str,
@@ -228,18 +268,7 @@ def verify_agent_response(
     )
 
     for tool_name, execution in seen_tools.items():
-        # We don't have the proxy's session key, so we can't verify
-        # the HMAC signature. Pass None to let the classifier treat
-        # the receipt as present-but-unverifiable (structural match
-        # still runs fully).
-        receipt_valid = None
-
-        verification = classify(
-            tool_name=tool_name,
-            agent_response=response_text,
-            execution=execution,
-            receipt_valid=receipt_valid,
-        )
+        verification = _verify_single(tool_name, execution, response_text)
         result.verifications.append(verification)
 
         if persist:
