@@ -120,7 +120,7 @@ Every tool interaction gets a classification with a confidence score:
 
 ---
 
-## Three Ways to Use ToolWitness
+## Two Ways to Use ToolWitness
 
 <div class="grid cards" markdown>
 
@@ -150,17 +150,19 @@ Every tool interaction gets a classification with a confidence score:
     # classification=VERIFIED, confidence=0.95
     ```
 
-    Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**.
+    Recording and verification are built into the same API. Works with **OpenAI**, **Anthropic**, **LangChain**, **MCP**, and **CrewAI**.
 
     [SDK quick start →](getting-started.md)
 
--   **MCP Proxy — record tool calls**
+-   **MCP — for Cursor, Claude Desktop, and other MCP hosts**
 
     ---
 
-    ### One Config Change, Zero Code
+    ### Zero Code, Full Verification
 
-    Wrap any MCP server to record every tool call with cryptographic receipts:
+    Two config entries. That's it. The **proxy** records what tools return; the **verification bridge** compares that against what the agent told you.
+
+    **Step 1: Record** — wrap any MCP server with the proxy:
 
     ```json
     {
@@ -173,27 +175,7 @@ Every tool interaction gets a classification with a confidence score:
     }
     ```
 
-    Use `which toolwitness` to find the full path.
-
-    [MCP Proxy quick start →](getting-started.md#mcp-proxy)
-
--   **Verification Bridge — catch fabrication in MCP hosts** :material-new-box:
-
-    ---
-
-    ### Close the Loop
-
-    The proxy records what tools returned — but it can't see what the agent *told you*. Without the bridge, you have recording without verification. The **verification bridge** closes that gap.
-
-    It handles real-world MCP output: long file contents, unstructured `key: value` text, and agent summaries that paraphrase rather than echo. Text grounding checks whether the agent's *claims* are supported by the *source*, not whether the source appears verbatim.
-
-    **CLI spot-check:**
-
-    ```bash
-    toolwitness verify --text "The file is 6169 bytes"
-    ```
-
-    **Real-time MCP server** — the agent self-verifies:
+    **Step 2: Verify** — add the ToolWitness MCP server:
 
     ```json
     {
@@ -206,13 +188,17 @@ Every tool interaction gets a classification with a confidence score:
     }
     ```
 
-    Pair with a Cursor rule so the agent calls `tw_verify_response` after every tool use. Results appear on the dashboard with a "Bridge" badge. When configured, threshold alerts fire automatically when failures accumulate. All verification happens locally — nothing leaves your machine. [Privacy details →](privacy.md)
+    The agent calls `tw_verify_response` after using tools, and the classification appears in your conversation. Pair with a Cursor rule for automatic verification.
 
-    [CLI reference →](cli.md#toolwitness-verify)
+    The bridge handles real-world MCP output — long file contents, `key: value` text, and agent summaries that paraphrase rather than echo. Text grounding checks whether the agent's *claims* are supported by the *source*, not whether the source appears verbatim.
+
+    Results appear on the dashboard. When configured, threshold alerts fire automatically when failures accumulate. All verification happens locally — nothing leaves your machine. [Privacy details →](privacy.md)
+
+    Use `which toolwitness` to find the full path. [MCP quick start →](getting-started.md#mcp-proxy)
 
 </div>
 
-The same verification engine powers all three paths — cryptographic receipts, structural matching, and five-level classification. Whether you write agents or use them, ToolWitness watches the tool boundary.
+The same verification engine powers both paths — cryptographic receipts, structural matching, text grounding, and five-level classification. Whether you write agents or use them, ToolWitness watches the tool boundary.
 
 ---
 
