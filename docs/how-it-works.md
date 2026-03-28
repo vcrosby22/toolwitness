@@ -78,6 +78,20 @@ Compares specific values in the agent's text against the tool's return data. If 
 
 Checks whether the agent's claims are consistent with the structure of the tool output. If the tool returns temperature data and the agent claims to know humidity, that's an extra claim beyond what the tool provided.
 
+### Text grounding (long outputs)
+
+Real MCP tools don't always return clean JSON. `get_file_info` might return `"size: 6169\ncreated: 2026-03-28T10:15:00"` — a plain text string, not a structured dict. And `read_file` returns entire file contents that agents *summarize* rather than echo verbatim.
+
+Standard structural matching fails here. Checking whether the agent's summary "contains" the source text doesn't work — summaries paraphrase. Checking whether the source contains the agent's claims doesn't work either — the agent's language is different from the source format.
+
+ToolWitness handles this with two specialized strategies:
+
+- **KV text parsing** — detects `key: value` text patterns in tool output and restructures them into comparable dictionaries. `"size: 6169\ncreated: 2026-03-28"` becomes `{"size": "6169", "created": "2026-03-28"}`, enabling standard structural matching.
+
+- **Text grounding** — for truly long outputs (file contents, documentation), reverses the comparison direction. Instead of "does the source contain the agent's text?", it asks "are the agent's *claims* supported by the *source*?" It extracts quoted phrases, dates, numbers, acronyms, and distinctive words from the agent's response, then checks each claim against the source material. An agent that accurately summarizes a file scores high; an agent that invents a date that doesn't appear in the source gets flagged.
+
+This matters because without text grounding, fabrication detection would only work for short, structured outputs — exactly the ones that are already easy to verify manually. The hard cases — summarized file contents, paraphrased documentation, reformatted data — are where agents are most likely to fabricate and where grounding catches them.
+
 ### Chain verification (multi-turn)
 
 For sequences of tool calls, ToolWitness checks data flow between steps. If Tool A returns a customer ID and Tool B is supposed to look up that customer, ToolWitness verifies that Tool B's input actually matches Tool A's output.
@@ -229,7 +243,7 @@ ToolWitness includes two built-in visualization tools:
 toolwitness dashboard  # http://localhost:8321
 ```
 
-This starts a local HTTP server on your machine (like TensorBoard or `mkdocs serve`). No cloud, no account — open `localhost:8321` in your browser and Ctrl+C to stop. Live-updating dashboard with KPI cards, classification breakdown, per-tool failure rates, and recent verifications. Auto-refreshes every 5 seconds.
+This starts a local HTTP server on your machine (like TensorBoard or `mkdocs serve`). No cloud, no account — open `localhost:8321` in your browser and Ctrl+C to stop. Live-updating dashboard with KPI cards, classification breakdown, per-tool failure rates, and recent verifications. Auto-refreshes every 5 seconds. All data reads from local SQLite — nothing is transmitted. [Privacy details →](privacy.md)
 
 ### HTML report
 
@@ -305,6 +319,8 @@ Scheduled summary of verification activity. Run from cron or manually:
 ```bash
 toolwitness digest --send --period 24h
 ```
+
+Alerts send classification metadata only (tool name, confidence, classification) — never code, file contents, or prompts. [Privacy details →](privacy.md)
 
 See [Alerting Model](alerting-model.md) for the full design including user personas and configuration examples.
 

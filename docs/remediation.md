@@ -17,7 +17,7 @@ ToolWitness surfaces failures through multiple channels:
 - **Dashboard** (`toolwitness dashboard`) — live overview with classification breakdown and recent failures
 - **CLI** (`toolwitness check --last 10`) — quick terminal check
 - **HTML Report** (`toolwitness report --format html`) — shareable artifact with full evidence
-- **Alerts** — webhook or Slack notifications when a failure matches your rules
+- **Alerts** — webhook or Slack notifications when a failure matches your rules. Alerts contain classification metadata only (tool name, confidence) — never code, file contents, or prompts. [Privacy details →](privacy.md#alert-privacy)
 
 ### 2. Understand It
 
@@ -25,7 +25,7 @@ Every failure includes:
 
 - **Classification** — FABRICATED, SKIPPED, or EMBELLISHED
 - **Confidence score** — how certain ToolWitness is about the classification (0.0 to 1.0)
-- **Evidence** — which values matched, which were mismatched, and what extra claims the agent made
+- **Evidence** — which values matched, which were mismatched, and what extra claims the agent made. All evidence stays in your local SQLite database — nothing is transmitted.
 - **Chain context** — if the failure involves data flowing between tools, the chain break is highlighted
 
 ### 3. Fix It

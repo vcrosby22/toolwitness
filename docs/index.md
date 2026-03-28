@@ -98,11 +98,23 @@ Every tool interaction gets a classification with a confidence score:
 
     Not just "you have a problem" but "here's how to fix it." Every failure includes actionable fix suggestions with code examples.
 
--   **Free and local**
+-   **Smart alerting**
 
     ---
 
-    No account. No cloud. No cost. The dashboard runs on your machine at `localhost:8321` — your data never leaves. Open source forever.
+    Daily digest reports, threshold alerts when failures accumulate, Slack and webhook delivery. Catches *patterns*, not noise — 10 failures in an hour means something; one borderline classification doesn't. [Alerting model →](alerting-model.md)
+
+-   **Built for two audiences**
+
+    ---
+
+    **Developers** get inline verification right in the conversation. **Team leads and PMs** get daily digests and threshold alerts — passive monitoring without watching every chat. [User personas →](alerting-model.md#user-profiles)
+
+-   **Private by design**
+
+    ---
+
+    All data in local SQLite. No cloud, no accounts, no telemetry. Alerts send only classification metadata (tool name + confidence) — never your code, file contents, or prompts. The dashboard runs on `localhost`. [Full privacy model →](privacy.md)
 
 </div>
 
@@ -171,7 +183,9 @@ Every tool interaction gets a classification with a confidence score:
 
     ### Close the Loop
 
-    The proxy records what tools return. The **verification bridge** compares that against what the agent *told you*. Two options:
+    The proxy records what tools returned — but it can't see what the agent *told you*. Without the bridge, you have recording without verification. The **verification bridge** closes that gap.
+
+    It handles real-world MCP output: long file contents, unstructured `key: value` text, and agent summaries that paraphrase rather than echo. Text grounding checks whether the agent's *claims* are supported by the *source*, not whether the source appears verbatim.
 
     **CLI spot-check:**
 
@@ -192,7 +206,7 @@ Every tool interaction gets a classification with a confidence score:
     }
     ```
 
-    Pair with a Cursor rule so the agent calls `tw_verify_response` after every tool use.
+    Pair with a Cursor rule so the agent calls `tw_verify_response` after every tool use. Results appear on the dashboard with a "Bridge" badge. When configured, threshold alerts fire automatically when failures accumulate. All verification happens locally — nothing leaves your machine. [Privacy details →](privacy.md)
 
     [CLI reference →](cli.md#toolwitness-verify)
 

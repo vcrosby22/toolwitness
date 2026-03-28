@@ -97,14 +97,42 @@ This means ToolWitness cannot accidentally expose your proprietary code, configu
 
 ## Alert Privacy
 
-When configuring webhook or Slack alerts, you control the detail level:
+When you configure webhook or Slack alerts, you're sending data outside your machine. Here's exactly what goes out.
 
-| Mode | What's sent | Use case |
-|---|---|---|
-| **Summary** | Classification + tool name + confidence only | Sensitive environments — no data leaves the alert |
-| **Full** | Summary + claimed values + actual tool output | Internal debugging — full context for investigation |
+### What each detail level sends
 
-Configure in `toolwitness.yaml`:
+| Field | Summary mode | Full mode |
+|---|:-:|:-:|
+| Tool name (e.g. `get_file_info`) | :material-check: | :material-check: |
+| Classification (e.g. `fabricated`) | :material-check: | :material-check: |
+| Confidence score (e.g. `0.85`) | :material-check: | :material-check: |
+| Session ID | :material-check: | :material-check: |
+| Claimed vs actual values | :material-close: | :material-check: |
+| Receipt ID | :material-close: | :material-check: |
+
+### What is NEVER sent in alerts
+
+Regardless of detail level, alert payloads **never** include:
+
+- Source code or file contents
+- Agent prompt text, system messages, or conversation history
+- Environment variables, API keys, or credentials
+- Full tool output data (even in "full" mode, only the *mismatched values* are included — not the complete tool response)
+
+### Slack message format
+
+A Slack alert looks like this:
+
+```
+:x: ToolWitness Alert
+Tool: get_file_info
+Classification: FABRICATED
+Confidence: 85.0%
+```
+
+That's it — four lines. No file contents, no code, no prompts.
+
+### Configuration
 
 ```yaml
 alerting:
@@ -112,6 +140,31 @@ alerting:
 ```
 
 Default is `summary` — ToolWitness errs on the side of privacy.
+
+---
+
+## Digest Privacy
+
+The `toolwitness digest --send` command delivers a periodic summary to Slack or webhook. The digest payload contains **aggregate counts only**:
+
+- Total verifications in the period
+- Total failures (count and rate)
+- Breakdown by classification (verified: 44, fabricated: 2, skipped: 1)
+- Top offending tool *names* with failure counts
+
+The digest **never** includes individual tool outputs, file contents, agent responses, or any raw data from specific verifications. It's a statistical summary — like getting "3 build failures today" without the build logs.
+
+---
+
+## Threshold Alert Privacy
+
+Threshold alerts fire when failure counts or rates breach a configured limit (e.g. 10+ failures in 60 minutes). The alert payload contains:
+
+- The *name* of the worst-offending tool
+- Its classification and confidence
+- The threshold that was breached (e.g. "10 failures in 60min")
+
+No tool output data, no agent text, no file contents. The alert tells you *something is wrong* and *which tool* — you investigate the details on your local dashboard.
 
 ---
 
@@ -138,6 +191,20 @@ The `toolwitness proxy` command deserves specific attention because it sits in t
 
 ---
 
+## Verification Bridge Privacy
+
+The verification bridge (`toolwitness verify` CLI and `tw_verify_response` MCP tool) compares the agent's response text against proxy-recorded tool outputs. Here's the data flow:
+
+1. **Agent response text** — you provide this (via CLI or the agent calls `tw_verify_response`). It is compared against tool outputs **locally** and stored in the local SQLite database. It is never transmitted anywhere.
+2. **Tool outputs** — read from local SQLite (where the proxy recorded them). Never leave the database.
+3. **Verification results** — classification, confidence, and evidence are written to local SQLite. Visible on the local dashboard.
+
+If you have alerting configured, the bridge sends alerts through the same channels with the same privacy guarantees described above — classification metadata only, never raw data.
+
+The bridge's text grounding engine (used for long outputs like file contents) extracts claims from the agent's text and checks them against the source. This happens entirely in local memory. No external API, no cloud service, no network call.
+
+---
+
 ## Security Model Summary
 
 | Property | Guarantee |
@@ -147,6 +214,10 @@ The `toolwitness proxy` command deserves specific attention because it sits in t
 | Training | Never — your data is not used |
 | Failure mode | Fail-open — never blocks your agent |
 | Scope | Tool I/O only — no code, no secrets, no prompts (proxy scope is even narrower) |
-| Alerts | Configurable detail level (summary vs full) |
+| Verification bridge | Compares locally, stores locally — response text never transmitted |
+| Alerts (summary) | Classification + tool name + confidence only — no raw data |
+| Alerts (full) | Adds mismatched values — still no source code, prompts, or file contents |
+| Digest reports | Aggregate counts only — no individual tool outputs |
+| Threshold alerts | Tool name + classification + breach reason — no raw data |
 | License | Apache 2.0 — fully open source |
 | Dependencies | Core engine: zero external dependencies |

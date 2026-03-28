@@ -303,6 +303,81 @@ toolwitness proxy --db /path/to/custom.db -- npx your-server
 toolwitness proxy --session-id my-session -- python my_server.py
 ```
 
+### Close the Loop — Verification Bridge
+
+The proxy records what tools return, but it can't see what the agent tells you. To detect fabrication, you need the **verification bridge** — it compares the agent's response text against proxy-recorded tool outputs.
+
+**Option A: Real-time self-verification (recommended)**
+
+Add `toolwitness serve` as a second MCP server in your config:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "/full/path/to/toolwitness",
+      "args": ["proxy", "--", "npx", "your-server"]
+    },
+    "toolwitness": {
+      "command": "/full/path/to/toolwitness",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+Then add a Cursor rule (or equivalent for your MCP host) that tells the agent to call `tw_verify_response` after using monitored tools. The verification result appears right in the conversation — the agent sees its own accuracy rating.
+
+Verification results are tagged with a "Bridge" badge on the dashboard, separate from SDK-originated verifications.
+
+**Option B: CLI spot-check**
+
+After seeing an agent response you want to verify:
+
+```bash
+toolwitness verify --text "The file is 6169 bytes, modified on March 27"
+```
+
+The bridge handles real-world MCP output — long file contents, key-value text formats, agent summaries that paraphrase rather than echo. [How text grounding works →](how-it-works.md#text-grounding-long-outputs)
+
+All verification happens locally. Response text is stored in your local SQLite database, never transmitted. [Privacy details →](privacy.md#verification-bridge-privacy)
+
+---
+
+## Notifications
+
+Once you have verifications flowing (from the SDK or the bridge), you can set up passive monitoring so you don't have to watch the dashboard constantly.
+
+### Quick setup
+
+**Step 1:** Add alerting config to `toolwitness.yaml`:
+
+```yaml
+alerting:
+  slack_webhook_url: https://hooks.slack.com/services/...
+
+  threshold_rules:
+    - name: failure_accumulation
+      max_failures: 10
+      window_minutes: 60
+```
+
+Threshold alerts fire automatically when the bridge or SDK detects failures that breach your limit.
+
+**Step 2:** Preview the daily digest:
+
+```bash
+toolwitness digest --period 24h
+```
+
+**Step 3:** Schedule delivery via cron:
+
+```bash
+0 18 * * * /path/to/toolwitness digest --send --period 24h
+```
+
+Alerts send classification metadata only — tool name, confidence, classification. No code, no file contents, no prompts leave your machine. [Full alerting model →](alerting-model.md) | [Privacy details →](privacy.md#alert-privacy)
+
 ---
 
 ## What's Next
