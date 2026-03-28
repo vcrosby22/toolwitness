@@ -6,6 +6,9 @@ See what ToolWitness looks like in action. Every surface is built into the open-
 
 ## Dashboard Overview
 
+!!! info "100% local — nothing leaves your machine"
+    The dashboard is a local HTTP server that reads from your SQLite database. No cloud service, no account, no data transmitted anywhere. Run `toolwitness dashboard`, open **http://localhost:8321** in your browser, and Ctrl+C when you're done. Same pattern as TensorBoard or `mkdocs serve`.
+
 Run `toolwitness dashboard` and open [localhost:8321](http://localhost:8321) to see the live dashboard. It auto-refreshes every 5 seconds.
 
 **What you see:**

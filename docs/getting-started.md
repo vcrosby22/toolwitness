@@ -152,6 +152,9 @@ toolwitness report --format html                   # HTML report
 toolwitness dashboard                              # Local web dashboard
 ```
 
+!!! info "The dashboard runs on your machine"
+    `toolwitness dashboard` starts a local HTTP server at **http://localhost:8321** — same pattern as TensorBoard or `mkdocs serve`. No cloud, no account, no data leaves your machine. Open the URL in your browser and you'll see live results from your local SQLite database. Ctrl+C stops the server.
+
 See [CLI Reference →](cli.md) for all commands and options.
 
 ---

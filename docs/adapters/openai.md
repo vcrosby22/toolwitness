@@ -1,4 +1,4 @@
-# OpenAI Adapter
+ I di# OpenAI Adapter
 
 Monitor tool calls made through the OpenAI Python client.
 

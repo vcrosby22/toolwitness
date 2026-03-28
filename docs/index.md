@@ -96,7 +96,7 @@ Every tool interaction gets a classification with a confidence score:
 
     ---
 
-    No account. No cloud. No cost. Install, run, and see results in under a minute. Open source forever.
+    No account. No cloud. No cost. The dashboard runs on your machine at `localhost:8321` — your data never leaves. Open source forever.
 
 </div>
 

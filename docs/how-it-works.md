@@ -126,7 +126,7 @@ ToolWitness includes two built-in visualization tools:
 toolwitness dashboard  # http://localhost:8321
 ```
 
-Live-updating dashboard with KPI cards, classification breakdown, per-tool failure rates, and recent verifications. Auto-refreshes every 5 seconds.
+This starts a local HTTP server on your machine (like TensorBoard or `mkdocs serve`). No cloud, no account — open `localhost:8321` in your browser and Ctrl+C to stop. Live-updating dashboard with KPI cards, classification breakdown, per-tool failure rates, and recent verifications. Auto-refreshes every 5 seconds.
 
 ### HTML report
 
