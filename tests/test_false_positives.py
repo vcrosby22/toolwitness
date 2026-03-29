@@ -59,23 +59,14 @@ FALSE_POSITIVE_CORPUS = [
         "name": "boolean_true_text",
         "tool_output": {"available": True, "stock": 42},
         "agent_response": "Yes, the item is available with 42 in stock.",
-        # Known MVP limitation: structural matcher can't map True → "Yes"
-        # Requires semantic verification (post-MVP)
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # stock=42 matches; True is missing but ratio=1.0 with mismatched=0 → VERIFIED
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "number_in_prose",
         "tool_output": {"users": 1523, "active": 847},
         "agent_response": "There are 1,523 users, of which 847 are active.",
-        # Known MVP limitation: comma-separated numbers (1,523) split into
-        # 1 and 523 by the regex extractor, missing the actual value
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "percentage_from_ratio",
@@ -87,12 +78,8 @@ FALSE_POSITIVE_CORPUS = [
         "name": "empty_result_acknowledged",
         "tool_output": {"results": [], "total": 0},
         "agent_response": "The search returned no results.",
-        # Known MVP limitation: empty list + 0 total has no string values
-        # to match against "no results" — structural matcher sees only omission
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # Empty output recognition: all values empty/zero + "no results" → matched
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "nested_data_reported",
@@ -107,12 +94,8 @@ FALSE_POSITIVE_CORPUS = [
         "name": "status_code_interpretation",
         "tool_output": {"status": 200, "message": "OK"},
         "agent_response": "The request was successful.",
-        # Known MVP limitation: "successful" is a semantic interpretation
-        # of status=200 and message="OK" — structural matcher can't map this
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # Status code semantic table: 200 → "successful" matched
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "date_reformatted",
@@ -124,12 +107,8 @@ FALSE_POSITIVE_CORPUS = [
         "name": "large_number_abbreviated",
         "tool_output": {"revenue": 1500000, "currency": "USD"},
         "agent_response": "Revenue is $1.5 million.",
-        # Known MVP limitation: 1500000 → "$1.5 million" is magnitude
-        # conversion; structural matcher sees 1.5, not 1500000
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # Magnitude: 1500000 / 1_000_000 = 1.5 → matched
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "null_field_omitted",
@@ -153,12 +132,8 @@ FALSE_POSITIVE_CORPUS = [
         "name": "implicit_zero",
         "tool_output": {"errors": 0, "warnings": 3},
         "agent_response": "No errors, but 3 warnings.",
-        # Known MVP limitation: errors=0 is absent from text; structural
-        # matcher sees only "3" and can't match it to the correct field
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # Implicit zero: "No errors" matches errors=0
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "float_to_int",
@@ -176,12 +151,8 @@ FALSE_POSITIVE_CORPUS = [
         "name": "negative_number",
         "tool_output": {"balance": -42.50, "currency": "USD"},
         "agent_response": "The account is overdrawn by $42.50.",
-        # Known MVP limitation: structural matcher extracts 42.5 from text
-        # but tool output has -42.5; sign-stripping not handled
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # abs(value) fallback: -42.5 matches 42.5 in response
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "timestamp_humanized",
@@ -204,10 +175,8 @@ FALSE_POSITIVE_CORPUS = [
         "name": "boolean_false_text",
         "tool_output": {"available": False, "restock_date": "2026-04-01"},
         "agent_response": "Not currently available. Restocking on April 1, 2026.",
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
-        },
+        # Bool NL: False matched via \bnot\b; ISO date is missing not mismatched
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
     {
         "name": "enum_value_paraphrased",
@@ -230,12 +199,205 @@ FALSE_POSITIVE_CORPUS = [
             "in_stock": True, "variants": 3,
         },
         "agent_response": "Widget X weighs 1.2 kg and comes in 3 variants.",
-        # Known MVP limitation: in_stock=True not mentioned in text;
-        # same boolean-to-text limitation as boolean_true_text
-        "acceptable": {
-            Classification.VERIFIED, Classification.EMBELLISHED,
-            Classification.FABRICATED,
+        # 3 of 4 fields match; in_stock=True missing but ratio=1.0 → VERIFIED
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    # --- Text-based tool outputs (non-JSON) ---
+    {
+        "name": "text_list_directory",
+        "tool_output": (
+            "[FILE] README.md\n[FILE] setup.py\n"
+            "[DIR] src\n[DIR] tests\n[FILE] LICENSE"
+        ),
+        "agent_response": (
+            "The directory contains README.md, setup.py, LICENSE, "
+            "and two subdirectories: src and tests."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "text_read_file_summary",
+        "tool_output": (
+            "# Project README\n\n"
+            "This project implements a verification system.\n\n"
+            "## Installation\n\npip install toolwitness\n\n"
+            "## Usage\n\nRun `toolwitness check` to verify."
+        ),
+        "agent_response": (
+            "The README describes a verification system. "
+            "Install with pip install toolwitness, "
+            "then run toolwitness check."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "text_short_status_message",
+        "tool_output": "Build succeeded. 142 tests passed, 0 failed.",
+        "agent_response": "The build succeeded with all 142 tests passing.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "text_file_info_metadata",
+        "tool_output": (
+            "size: 8192\ncreated: Mon Mar 10 2026\n"
+            "modified: Fri Mar 28 2026\nisFile: true\npermissions: 644"
+        ),
+        "agent_response": (
+            "The file is 8192 bytes, last modified March 28 2026, "
+            "with standard 644 permissions."
+        ),
+        # Month normalization: "Mar 28 2026" ↔ "March 28 2026"
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "text_error_message",
+        "tool_output": "Error: ENOENT: no such file or directory, stat '/missing.txt'",
+        "agent_response": "The file /missing.txt was not found (ENOENT error).",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    # --- MCP filesystem proxy realistic cases ---
+    # These mirror what the proxy actually records and how agents respond.
+    # After _parse_kv_text, get_file_info output becomes a dict; directory
+    # listings and file contents stay as strings.
+    {
+        "name": "mcp_file_info_comma_size",
+        "tool_output": {
+            "size": 29931, "modified": "Mar 29 2026",
+            "isFile": "true", "permissions": 644,
         },
+        "agent_response": (
+            "The file is 29,931 bytes with 644 permissions, "
+            "last modified Mar 29 2026."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_large_comma",
+        "tool_output": {"size": 1523456, "permissions": 755},
+        "agent_response": "The file is 1,523,456 bytes with 755 permissions.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_selective",
+        "tool_output": {
+            "size": 4096, "created": "Mar 13 2026",
+            "modified": "Mar 28 2026", "isDirectory": "false",
+            "isFile": "true", "permissions": 644,
+        },
+        "agent_response": "The file is 4,096 bytes, last modified Mar 28 2026.",
+        # Two-pass: permissions=644 reclassified as omission since all
+        # response numbers (4096, 28, 2026) are claimed by other tool values
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_date_expanded",
+        "tool_output": {"size": 8192, "modified": "Mar 29 2026"},
+        "agent_response": "The file is 8,192 bytes, modified on March 29, 2026.",
+        # size=8192 matches; date missing but mismatched=0 → VERIFIED
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_natural_boolean",
+        "tool_output": {
+            "size": 2048, "isFile": "true", "isDirectory": "false",
+        },
+        "agent_response": "It's a 2,048-byte file.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_permissions_and_size",
+        "tool_output": {
+            "size": 6169, "permissions": 644, "isFile": "true",
+        },
+        "agent_response": "The file is 6,169 bytes with standard 644 permissions.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_size_round_kb",
+        "tool_output": {"size": 8192, "permissions": 644},
+        "agent_response": "The file is about 8 KB (644 permissions).",
+        # Magnitude: 8192 / 1024 = 8.0 → matched
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_combined_report",
+        "tool_output": {
+            "size": 15360, "created": "Mar 10 2026",
+            "modified": "Mar 28 2026", "permissions": 644,
+        },
+        "agent_response": (
+            "The file is 15,360 bytes (644 permissions), "
+            "created Mar 10 2026 and last modified Mar 28 2026."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_dir_listing_summary",
+        "tool_output": (
+            "[FILE] README.md\n[FILE] setup.py\n[FILE] LICENSE\n"
+            "[DIR] src\n[DIR] tests\n[FILE] pyproject.toml\n"
+            "[FILE] Makefile\n[DIR] docs"
+        ),
+        "agent_response": (
+            "The directory lists README.md, setup.py, LICENSE, "
+            "pyproject.toml, Makefile, and directories src, tests, and docs."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_dir_listing_count_only",
+        "tool_output": (
+            "[FILE] a.py\n[FILE] b.py\n[FILE] c.py\n"
+            "[DIR] data\n[DIR] output"
+        ),
+        "agent_response": "The directory contains 3 files and 2 folders.",
+        # Line-prefix counting: [FILE]×3 + [DIR]×2 matched to response numbers
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_read_file_paraphrase",
+        "tool_output": (
+            "# ToolWitness\n\n"
+            "A verification system for AI agent tool use.\n\n"
+            "## Installation\n\npip install toolwitness\n\n"
+            "## Quick Start\n\nRun `toolwitness doctor` to check setup.\n"
+            "Then configure your MCP servers and start verifying."
+        ),
+        "agent_response": (
+            "The README describes ToolWitness as a verification system "
+            "for AI agent tool use. You can install it with "
+            "pip install toolwitness, then run toolwitness doctor "
+            "to check setup."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_search_results_subset",
+        "tool_output": {
+            "matches": [
+                {"path": "/src/main.py", "line": 42},
+                {"path": "/src/utils.py", "line": 10},
+                {"path": "/tests/test_main.py", "line": 88},
+            ],
+        },
+        "agent_response": (
+            "Found 3 matches. The most relevant is /src/main.py at line 42."
+        ),
+        # BUG-02 list grouping: absent items (utils, test_main) → missing
+        # not mismatched; 2 matched, 0 mismatched → VERIFIED
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_write_success",
+        "tool_output": "Successfully wrote to /tmp/output.txt",
+        "agent_response": "I've written the content to /tmp/output.txt.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "mcp_file_info_six_digit_comma",
+        "tool_output": {"size": 102400, "permissions": 644},
+        "agent_response": "The file is 102,400 bytes with 644 permissions.",
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
 ]
 

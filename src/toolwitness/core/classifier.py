@@ -16,7 +16,11 @@ from toolwitness.core.types import (
     ToolExecution,
     VerificationResult,
 )
-from toolwitness.verification.structural import MatchResult, structural_match
+from toolwitness.verification.structural import (
+    MatchResult,
+    structural_match,
+    text_grounding_match,
+)
 
 
 def classify(
@@ -63,7 +67,11 @@ def classify(
             receipt=execution.receipt,
         )
 
-    match_result = structural_match(execution.output, agent_response)
+    if isinstance(execution.output, str):
+        match_result = text_grounding_match(execution.output, agent_response)
+    else:
+        match_result = structural_match(execution.output, agent_response)
+
     evidence = _build_evidence(match_result)
 
     classification, confidence = _score(match_result)
@@ -90,8 +98,15 @@ def _score(match: MatchResult) -> tuple[Classification, float]:
     matched = len(match.matched_values)
     mismatched = len(match.mismatched_values)
     missing_strings = len(match.missing_values)
+    substituted = len(match.substituted_values)
     has_extras = match.has_extra_claims
     total = matched + mismatched
+
+    # Entity substitution (e.g. said "NYC" when tool returned "Miami")
+    # is a strong fabrication signal regardless of match_ratio.
+    if substituted > 0:
+        confidence = 0.75 + min(substituted * 0.10, 0.20)
+        return Classification.FABRICATED, min(confidence, 0.90)
 
     if total == 0 and missing_strings == 0:
         return Classification.VERIFIED, 0.50
@@ -154,16 +169,20 @@ def _score(match: MatchResult) -> tuple[Classification, float]:
 
 def _build_evidence(match: MatchResult) -> dict[str, Any]:
     """Build a structured evidence dict from match results."""
-    return {
+    evidence: dict[str, Any] = {
         "match_ratio": match.match_ratio,
         "matched_count": len(match.matched_values),
         "mismatched_count": len(match.mismatched_values),
         "extra_claims_count": len(match.extra_claims),
         "missing_count": len(match.missing_values),
+        "substituted_count": len(match.substituted_values),
         "matched": match.matched_values[:5],
         "mismatched": match.mismatched_values[:5],
         "extra_claims": match.extra_claims[:5],
     }
+    if match.substituted_values:
+        evidence["substituted"] = match.substituted_values[:5]
+    return evidence
 
 
 # ------------------------------------------------------------------
@@ -183,7 +202,10 @@ def classify_handoff(
     Returns None when the structural match shows no corruption (the
     receiving agent reported the data accurately).
     """
-    match_result = structural_match(original_output, agent_response)
+    if isinstance(original_output, str):
+        match_result = text_grounding_match(original_output, agent_response)
+    else:
+        match_result = structural_match(original_output, agent_response)
 
     mismatched = len(match_result.mismatched_values)
     missing = len(match_result.missing_values)

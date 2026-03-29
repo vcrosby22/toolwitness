@@ -1,0 +1,28 @@
+# ToolWitness auto-verification
+
+## When this applies
+
+After the agent uses **any tool from a ToolWitness-proxied MCP server**
+(e.g. filesystem-monitored, or any server wrapped with `toolwitness proxy`),
+the agent **must** call `tw_verify_response` before finishing its turn.
+
+## What to do
+
+1. Complete your response as normal — include all information from the tool output.
+2. Before ending your turn, call the `tw_verify_response` MCP tool with your
+   **complete response text** as the `response_text` argument.
+3. If the verification returns `has_failures: true`, review the evidence and
+   correct any inaccuracies in a follow-up message.
+
+## Why
+
+ToolWitness compares what tools actually returned against what the agent tells
+the user. This catches fabrication (wrong data), embellishment (unsupported
+extra claims), and skipped tools (claiming a tool ran when it didn't).
+Results appear in the ToolWitness dashboard at http://localhost:8321.
+
+## Important
+
+- Do NOT skip verification to save time — it takes < 1 second.
+- Do NOT modify or summarize tool output before verifying.
+- The `response_text` should be your full response, not a subset.

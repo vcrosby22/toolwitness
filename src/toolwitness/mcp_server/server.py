@@ -23,7 +23,10 @@ Configure in Cursor's ``mcp.json``::
 from __future__ import annotations
 
 import json
+import logging
+import threading
 import time
+from http.server import HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +39,8 @@ from toolwitness.verification.bridge import (
     hydrate_execution,
     verify_agent_response,
 )
+
+logger = logging.getLogger("toolwitness")
 
 _DESCRIPTION = (
     "ToolWitness verification server. Compares agent responses against "
@@ -146,12 +151,109 @@ def tw_recent_executions(limit: int = 10) -> dict[str, Any]:
                 "output_preview": output_raw,
                 "error": row.get("error"),
             })
-        return {
+        response: dict[str, Any] = {
             "count": len(executions),
             "executions": executions,
         }
+        if not executions:
+            response["hint"] = (
+                "No proxy executions found. The proxy MCP server may not be "
+                "running. Call tw_health for a full diagnosis, or run "
+                "`toolwitness doctor` from the terminal."
+            )
+        return response
     finally:
         storage.close()
+
+
+@mcp.tool()
+def tw_health() -> dict[str, Any]:
+    """Check ToolWitness system health.
+
+    Returns status of database connectivity, recent proxy activity,
+    and whether the proxy is actively recording executions.
+    Use this when verification returns 0 executions to diagnose why.
+
+    Returns:
+        Dict with health status, proxy activity, and diagnosis message.
+    """
+    result: dict[str, Any] = {
+        "db_exists": False,
+        "db_writable": False,
+        "total_executions": 0,
+        "recent_executions": 0,
+        "proxy_active": False,
+        "last_execution_ago": None,
+        "diagnosis": "",
+    }
+
+    db_file = Path(_db_path) if _db_path else Path.home() / ".toolwitness" / "toolwitness.db"
+
+    if not db_file.exists():
+        result["diagnosis"] = (
+            f"Database not found at {db_file}. The proxy has never run. "
+            "Make sure filesystem-monitored is configured and running in "
+            "Cursor Settings > MCP, then use a monitored tool to generate data."
+        )
+        return result
+
+    result["db_exists"] = True
+
+    try:
+        storage = SQLiteStorage(str(db_file))
+    except Exception as exc:
+        result["diagnosis"] = f"Cannot open database: {exc}"
+        return result
+
+    try:
+        storage.close()
+        storage = SQLiteStorage(str(db_file))
+        result["db_writable"] = True
+    except Exception:
+        result["diagnosis"] = (
+            f"Database at {db_file} is not writable. Check file permissions."
+        )
+        return result
+
+    try:
+        all_execs = storage.query_executions(limit=10000)
+        result["total_executions"] = len(all_execs)
+
+        since_5m = time.time() - 300
+        recent = [e for e in all_execs if e.get("timestamp", 0) >= since_5m]
+        result["recent_executions"] = len(recent)
+        result["proxy_active"] = len(recent) > 0
+
+        if all_execs:
+            last_ts = max(e.get("timestamp", 0) for e in all_execs)
+            result["last_execution_ago"] = _time_ago(last_ts)
+
+        if result["total_executions"] == 0:
+            result["diagnosis"] = (
+                "Database exists but has 0 recorded executions. The proxy has "
+                "never successfully recorded a tool call. Check that "
+                "filesystem-monitored is running in Cursor Settings > MCP and "
+                "restart it if it shows an error. Then use a monitored tool "
+                "and call tw_recent_executions to confirm data flows."
+            )
+        elif not result["proxy_active"]:
+            result["diagnosis"] = (
+                f"Found {result['total_executions']} total execution(s), but "
+                f"none in the last 5 minutes (last was {result['last_execution_ago']}). "
+                "The proxy may have stopped. Restart filesystem-monitored in "
+                "Cursor Settings > MCP."
+            )
+        else:
+            result["diagnosis"] = (
+                f"Healthy. {result['recent_executions']} execution(s) in the "
+                f"last 5 minutes, {result['total_executions']} total."
+            )
+    except Exception as exc:
+        result["diagnosis"] = f"Error querying database: {exc}"
+    finally:
+        storage.close()
+
+    return result
 
 
 @mcp.tool()
@@ -219,12 +321,22 @@ def _format_result(result: BridgeVerificationResult) -> dict[str, Any]:
                 entry["evidence"]["mismatched_details"] = v.evidence["mismatched"][:3]
         verifications.append(entry)
 
-    return {
+    response: dict[str, Any] = {
         "session_id": result.session_id,
         "executions_checked": result.executions_checked,
         "has_failures": result.has_failures,
         "verifications": verifications,
     }
+
+    if result.executions_checked == 0:
+        response["hint"] = (
+            "No proxy executions found to verify against. The proxy MCP "
+            "server may not be running or no monitored tools were called "
+            "recently. Call tw_health for a full diagnosis, or run "
+            "`toolwitness doctor` from the terminal."
+        )
+
+    return response
 
 
 def _time_ago(timestamp: float) -> str:
@@ -239,7 +351,49 @@ def _time_ago(timestamp: float) -> str:
     return f"{int(diff / 86400)}d ago"
 
 
-def run_server(db_path: str | None = None) -> None:
-    """Start the MCP server with stdio transport."""
+def _start_dashboard_thread(
+    db_path: str | None,
+    port: int = 8321,
+    host: str = "127.0.0.1",
+) -> None:
+    """Start the dashboard HTTP server on a background daemon thread.
+
+    If the port is already in use, logs a warning and skips — never
+    crashes the MCP server.
+    """
+    from toolwitness.dashboard.server import DashboardHandler
+
+    storage_path = db_path or str(
+        Path.home() / ".toolwitness" / "toolwitness.db"
+    )
+    DashboardHandler.storage_path = storage_path
+
+    try:
+        server = HTTPServer((host, port), DashboardHandler)
+    except OSError as exc:
+        logger.warning(
+            "Dashboard not started (port %d may be in use): %s", port, exc,
+        )
+        return
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        name="toolwitness-dashboard",
+        daemon=True,
+    )
+    thread.start()
+    logger.info("Dashboard available at http://%s:%d", host, port)
+
+
+def run_server(
+    db_path: str | None = None,
+    dashboard_port: int = 8321,
+) -> None:
+    """Start the MCP server with stdio transport + embedded dashboard.
+
+    Set ``dashboard_port=0`` to disable the embedded dashboard.
+    """
     configure(db_path)
+    if dashboard_port:
+        _start_dashboard_thread(db_path, port=dashboard_port)
     mcp.run(transport="stdio")

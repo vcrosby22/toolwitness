@@ -336,6 +336,23 @@
   milestone: Post-MVP
   tags: [multi-turn, nl, claims]
 
+- id: ST-35
+  type: story
+  parent: EP-05
+  title: Structural matching hardening (v0.1.2)
+  description: >
+    Six fixes to reduce false-positive known limitations from 9 to 3:
+    bool isinstance ordering + NL mapping (yes/not/available/disabled),
+    month abbreviation normalization (Mar→March), negative number abs()
+    fallback, context-aware magnitude scaling (KB/MB/million), implicit
+    zero pattern matching ("No errors" for errors=0), and two-pass
+    numeric omission reclassification for flat dicts.
+  priority: P1
+  status: done
+  milestone: v0.1.2
+  related: [TK-03, BUG-01, BUG-02, BUG-03, BUG-04]
+  tags: [verification, structural, false-positives]
+
 - id: ST-34
   type: story
   parent: EP-05
@@ -344,9 +361,13 @@
     Detect when an agent selectively reports N of M items from a list.
     Distinguish legitimate summary from fabrication.
   priority: P2
-  status: open
-  milestone: Post-MVP
+  status: done
+  milestone: v0.1.1
   related: [BUG-02]
+  notes: >
+    MVP implementation via list-item-aware grouping in structural_match.
+    Absent list-item groups treated as omissions. Future: semantic
+    similarity for partial list-item mentions.
   tags: [summarization, lists, structural]
 
 # ──────────────────────────────────────────────────
@@ -564,13 +585,18 @@
     instead of VERIFIED. Requires semantic verification or conversion
     tables to resolve.
   priority: P2
-  status: open
-  milestone: Post-MVP
+  status: done
+  milestone: v0.1.1
   discovered: "2026-03-27 — Week 1 test suite"
+  resolved: "2026-03-29 — conversion table fallback in structural_match"
   fixture: unit_conversion
   evidence: >
     structural_match returns mismatched (temp_f=72 not found, 22 present).
     Classifier scores FABRICATED with confidence 0.68.
+  resolution: >
+    Added _conversion_close() with 10 common imperial/metric conversion
+    pairs (F/C, mi/km, lb/kg, in/cm, ft/m). Uses tighter 1.2% tolerance
+    to avoid coincidental matches. Falls back after _numeric_close fails.
   tags: [bug, false-negative, unit-conversion, structural-limitation]
 
 - id: BUG-02
@@ -584,14 +610,20 @@
     as contradictions because other numbers ARE present in the response.
     Classified as FABRICATED instead of VERIFIED/EMBELLISHED.
   priority: P2
-  status: open
-  milestone: Post-MVP
+  status: done
+  milestone: v0.1.1
   discovered: "2026-03-27 — Week 1 test suite"
+  resolved: "2026-03-29 — list-item-aware grouping in structural_match"
   fixture: summary
   evidence: >
     structural_match returns 4 matched, 3 mismatched (55, 68, 45 not found
     but response contains 80, 72). match_ratio=0.57. Classifier scores
     FABRICATED with confidence 0.72.
+  resolution: >
+    Added list-item-aware grouping: flattened keys are partitioned by
+    list-item prefix (e.g. results[0]). If no value from a group appears
+    in the response, all its values go to missing_values (omission)
+    instead of mismatched_values (contradiction).
   tags: [bug, false-negative, summarization, structural-limitation]
 
 - id: BUG-03
@@ -606,15 +638,46 @@
     but the classifier treats it as selective omission because everything
     mentioned was correct.
   priority: P1
-  status: open
-  milestone: Post-MVP
+  status: done
+  milestone: v0.1.1
   discovered: "2026-03-27 — Week 1 test suite"
+  resolved: "2026-03-29 — substitution detection in structural_match + _score"
   fixture: wrong_city
   evidence: >
     structural_match returns matched=2 (temp_f, condition), missing=1 (city).
     match_ratio=1.0. Classifier scores VERIFIED with confidence 0.99.
     Requires NER or field-importance weighting to detect substitution.
+  resolution: >
+    Added substituted_values field to MatchResult and _detect_substitution()
+    helper with two strategies: (1) multi-word token-swap detection for
+    dates/phrases, (2) proper-noun heuristic for single-word entities.
+    _score() returns FABRICATED when substituted_values > 0. Catches both
+    city name swaps (Miami→NYC) and date swaps (Mar 28→Mar 15).
   tags: [bug, false-positive, entity-substitution, structural-limitation]
+
+- id: BUG-04
+  type: bug
+  parent: EP-05
+  related: [ST-30, ST-02]
+  title: "Comma-formatted numbers classified as FABRICATED"
+  description: >
+    When an agent writes "29,931 bytes" referring to size: 29931, the
+    _extract_numbers regex splits "29,931" into two separate numbers
+    (29 and 931). Neither matches 29931, so the structural matcher
+    classifies as FABRICATED. Same issue affects "1,523 users" → 1523.
+    This is the most common false positive in MCP proxy verification
+    because agents naturally format numbers with thousands separators.
+  priority: P1
+  status: done
+  milestone: v0.1.1
+  discovered: "2026-03-29 — live MCP end-to-end test"
+  fixture: comma_formatted_number
+  evidence: >
+    _extract_numbers("29,931 bytes") returns [29.0, 931.0] instead of
+    [29931.0]. structural_match sees size=29931 not found, response has
+    [29, 931] → mismatched. Classifier scores FABRICATED with confidence
+    0.83. Fix: update regex to handle comma-separated thousands.
+  tags: [bug, false-positive, number-formatting, structural-limitation]
 
 # ──────────────────────────────────────────────────
 # TASKS — Layer 2/3 testing infrastructure
@@ -661,11 +724,13 @@
   status: done
   milestone: Week 3
   notes: >
-    15 corpus cases in tests/test_false_positives.py. 5 cases have known
-    MVP limitations (boolean-to-text, comma numbers, empty results, status
-    semantics, magnitude abbreviation) with widened acceptable sets.
-    Runs in CI via pytest.
-  related: [BUG-01, BUG-02, BUG-03]
+    46 corpus cases in tests/test_false_positives.py (expanded March 2026).
+    0 known limitations — all 46 pass strict VERIFIED/EMBELLISHED.
+    v0.1.1 reduced from 12 to 9, v0.1.2 reduced from 9 to 3,
+    v0.1.3 semantic heuristics (status codes, line-prefix counting,
+    empty output recognition) reduced from 3 to 0.
+    Runs in CI via pytest with <2% false positive rate gate.
+  related: [BUG-01, BUG-02, BUG-03, BUG-04]
   tags: [tests, layer4, false-positives, regression]
 
 # ──────────────────────────────────────────────────

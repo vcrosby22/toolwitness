@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.fixtures import FABRICATION_FIXTURES
+from tests.fixtures import FABRICATION_FIXTURES, MCP_FABRICATION_FIXTURES
 from toolwitness.core.classifier import classify
 from toolwitness.core.receipt import generate_receipt, generate_session_key
 from toolwitness.core.types import Classification, ToolExecution
@@ -73,6 +73,32 @@ class TestClassifierWithFixtures:
         assert result.classification == Classification.FABRICATED
 
 
+class TestMCPFabricationFixtures:
+    """Run the classifier against MCP filesystem proxy fabrication fixtures."""
+
+    @pytest.fixture(autouse=True)
+    def setup_key(self):
+        self.session_key = generate_session_key()
+
+    @pytest.mark.parametrize(
+        "fixture",
+        MCP_FABRICATION_FIXTURES,
+        ids=[f["name"] for f in MCP_FABRICATION_FIXTURES],
+    )
+    def test_mcp_fixture(self, fixture):
+        execution = _make_execution(fixture["tool_output"], self.session_key)
+        result = classify(
+            tool_name="test_tool",
+            agent_response=fixture["agent_response"],
+            execution=execution,
+            receipt_valid=True,
+        )
+        assert result.classification == fixture["expected"], (
+            f"MCP fixture '{fixture['name']}': expected {fixture['expected'].value}, "
+            f"got {result.classification.value} (confidence={result.confidence:.2f})"
+        )
+
+
 class TestClassifierConfidenceRanges:
     """Verify confidence scores fall within expected ranges per classification."""
 
@@ -116,6 +142,151 @@ class TestClassifierConfidenceRanges:
         )
         assert result.classification == Classification.FABRICATED
         assert 0.60 <= result.confidence <= 0.95
+
+
+class TestClassifierTextOutputs:
+    """Verify that plain-text tool outputs (non-JSON) are classified correctly
+    via text_grounding_match instead of structural_match."""
+
+    @pytest.fixture(autouse=True)
+    def setup_key(self):
+        self.session_key = generate_session_key()
+
+    def test_list_directory_accurate_summary(self):
+        """Accurate summary of a directory listing should be VERIFIED."""
+        output = (
+            "[FILE] CURSOR_KNOWLEDGE.md\n"
+            "[FILE] CONTEXT_ROT.md\n"
+            "[FILE] WHAT_IS_AN_AGENT.md\n"
+            "[DIR] agent-snapshots\n"
+            "[DIR] context-engineering-digests"
+        )
+        execution = _make_execution(output, self.session_key)
+        result = classify(
+            tool_name="list_directory",
+            agent_response=(
+                "The directory contains CURSOR_KNOWLEDGE.md, CONTEXT_ROT.md, "
+                "and WHAT_IS_AN_AGENT.md, plus subdirectories for "
+                "agent-snapshots and context-engineering-digests."
+            ),
+            execution=execution,
+            receipt_valid=True,
+        )
+        assert result.classification == Classification.VERIFIED, (
+            f"Expected VERIFIED, got {result.classification.value} "
+            f"(confidence={result.confidence:.2f}, evidence={result.evidence})"
+        )
+
+    def test_list_directory_fabricated_content(self):
+        """Fabricated directory contents should be FABRICATED."""
+        output = (
+            "[FILE] CURSOR_KNOWLEDGE.md\n"
+            "[FILE] CONTEXT_ROT.md\n"
+            "[DIR] agent-snapshots"
+        )
+        execution = _make_execution(output, self.session_key)
+        result = classify(
+            tool_name="list_directory",
+            agent_response=(
+                "The directory contains important financial reports, "
+                "stock analysis spreadsheets, and quarterly earnings data."
+            ),
+            execution=execution,
+            receipt_valid=True,
+        )
+        assert result.classification == Classification.FABRICATED, (
+            f"Expected FABRICATED, got {result.classification.value} "
+            f"(confidence={result.confidence:.2f})"
+        )
+
+    def test_read_file_accurate_summary(self):
+        """Accurate summary of file contents should be VERIFIED."""
+        output = (
+            "# ToolWitness — Session handoff\n\n"
+            "ToolWitness detects when AI agents skip tool execution "
+            "or misrepresent tool outputs.\n\n"
+            "## Detection model\n\n"
+            "1. Tool skip — agent claims a tool ran; no execution.\n"
+            "2. Result fabrication — tool ran; agent lies about output."
+        )
+        execution = _make_execution(output, self.session_key)
+        result = classify(
+            tool_name="read_file",
+            agent_response=(
+                "The ToolWitness handoff document describes the detection model: "
+                "tool skip (agent claims execution without running) and result "
+                "fabrication (agent misrepresents output)."
+            ),
+            execution=execution,
+            receipt_valid=True,
+        )
+        assert result.classification == Classification.VERIFIED, (
+            f"Expected VERIFIED, got {result.classification.value} "
+            f"(confidence={result.confidence:.2f}, evidence={result.evidence})"
+        )
+
+    def test_read_file_fabricated_claims(self):
+        """Fabricated claims about file content should be FABRICATED."""
+        output = (
+            "# ToolWitness — Session handoff\n\n"
+            "ToolWitness detects when AI agents skip tool execution."
+        )
+        execution = _make_execution(output, self.session_key)
+        result = classify(
+            tool_name="read_file",
+            agent_response=(
+                "The document discusses cryptocurrency trading strategies "
+                "and provides Bitcoin investment portfolio recommendations."
+            ),
+            execution=execution,
+            receipt_valid=True,
+        )
+        assert result.classification == Classification.FABRICATED, (
+            f"Expected FABRICATED, got {result.classification.value} "
+            f"(confidence={result.confidence:.2f})"
+        )
+
+    def test_short_text_accurate(self):
+        """Short single-line text output with accurate report should be VERIFIED."""
+        output = "Operation completed successfully. 3 files processed."
+        execution = _make_execution(output, self.session_key)
+        result = classify(
+            tool_name="run_task",
+            agent_response="The operation completed successfully, processing 3 files.",
+            execution=execution,
+            receipt_valid=True,
+        )
+        assert result.classification == Classification.VERIFIED, (
+            f"Expected VERIFIED, got {result.classification.value} "
+            f"(confidence={result.confidence:.2f})"
+        )
+
+    def test_get_file_info_text_accurate(self):
+        """File metadata as text (MCP-style) accurately reported."""
+        output = (
+            "size: 3953\n"
+            "created: Fri Mar 13 2026\n"
+            "modified: Sat Mar 28 2026\n"
+            "permissions: 644"
+        )
+        execution = _make_execution(output, self.session_key)
+        result = classify(
+            tool_name="get_file_info",
+            agent_response=(
+                "The file is 3953 bytes with permissions 644, "
+                "last modified on March 28, 2026."
+            ),
+            execution=execution,
+            receipt_valid=True,
+        )
+        # EMBELLISHED is acceptable: "March 28, 2026" doesn't match
+        # abbreviated "Mar 28 2026" in source — a known date-format limitation
+        assert result.classification in (
+            Classification.VERIFIED, Classification.EMBELLISHED,
+        ), (
+            f"Expected VERIFIED or EMBELLISHED, got {result.classification.value} "
+            f"(confidence={result.confidence:.2f}, evidence={result.evidence})"
+        )
 
 
 class TestClassifierEdgeCases:

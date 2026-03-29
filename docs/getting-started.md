@@ -151,11 +151,13 @@ toolwitness check --last 5                         # Recent results
 toolwitness stats                                  # Per-tool failure rates
 toolwitness watch                                  # Live tail
 toolwitness report --format html                   # HTML report
-toolwitness dashboard                              # Local web dashboard
+toolwitness dashboard                              # Local web dashboard (standalone)
 ```
 
-!!! info "The dashboard runs on your machine"
-    `toolwitness dashboard` starts a local HTTP server at **http://localhost:8321** — same pattern as TensorBoard or `mkdocs serve`. No cloud, no account, no data leaves your machine. Open the URL in your browser and you'll see live results from your local SQLite database. Ctrl+C stops the server.
+!!! info "The dashboard starts automatically"
+    When `toolwitness serve` is running as an MCP server (see [MCP Proxy](#mcp-proxy) below), the dashboard is **automatically available** at **http://localhost:8321** — no extra terminal needed. It starts as a background thread inside the MCP server process and stops when Cursor closes. Works on macOS, Windows, and Linux.
+
+    The standalone `toolwitness dashboard` command is still available if you want to run it separately (e.g. without the MCP server).
 
 See [CLI Reference →](cli.md) for all commands and options.
 
@@ -326,9 +328,19 @@ Add `toolwitness serve` as a second MCP server in your config:
 }
 ```
 
-Then add a Cursor rule (or equivalent for your MCP host) that tells the agent to call `tw_verify_response` after using monitored tools. The verification result appears right in the conversation — the agent sees its own accuracy rating.
+This also starts the **dashboard automatically** at [http://localhost:8321](http://localhost:8321) — no extra terminal needed.
 
-Verification results are tagged with a "Bridge" badge on the dashboard, separate from SDK-originated verifications.
+**Step 3: Enable automatic verification**
+
+Run this once in your project directory:
+
+```bash
+toolwitness init --cursor-rule
+```
+
+This creates `.cursor/rules/toolwitness-verify.mdc`, which tells the agent to call `tw_verify_response` after using monitored tools. Without this rule, the proxy records tool calls but the dashboard won't show trust classifications (VERIFIED/FABRICATED).
+
+Verification results appear in the conversation and on the dashboard, tagged with a "Bridge" badge.
 
 **Option B: CLI spot-check**
 
@@ -377,6 +389,49 @@ toolwitness digest --period 24h
 ```
 
 Alerts send classification metadata only — tool name, confidence, classification. No code, no file contents, no prompts leave your machine. [Full alerting model →](alerting-model.md) | [Privacy details →](privacy.md#alert-privacy)
+
+---
+
+## Troubleshooting
+
+### "I see 0 executions"
+
+The most common first-run issue. The verification server returns empty results because the proxy isn't recording tool calls.
+
+**Quick diagnosis:**
+
+```bash
+toolwitness doctor
+```
+
+This checks every prerequisite — Python version, binary path, database, Node/npx, MCP config — and tells you exactly what to fix.
+
+If you're inside Cursor, you can also call the `tw_health` MCP tool directly. It checks database connectivity and proxy activity, and returns a plain-English diagnosis.
+
+**Common causes:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `tw_health` says "0 recorded executions" | Proxy never started successfully | Restart `filesystem-monitored` in Cursor Settings > MCP |
+| `toolwitness doctor` warns about duplicate configs | Same server defined in both global and project MCP config | Remove the duplicate from `.cursor/mcp.json` (keep global) |
+| `npx not found` | Node.js not installed | `brew install node` (macOS) or install from [nodejs.org](https://nodejs.org) |
+| `MCP SDK not installed` | Missing dependency for `toolwitness serve` | `pip install 'toolwitness[mcp]'` |
+| Proxy starts but Cursor shows error | Path to `toolwitness` binary is wrong in MCP config | Run `which toolwitness` and update the `command` field |
+
+### End-to-end verification test
+
+To confirm the full pipeline works:
+
+1. Make sure both MCP servers show green in Cursor Settings > MCP
+2. Use a monitored tool (e.g. read a file through the filesystem server)
+3. Call `tw_recent_executions` — you should see the tool call listed
+4. Call `tw_verify_response` with your response text — you should see a classification
+
+If step 3 returns 0 executions, the proxy isn't recording. Run `toolwitness doctor` for detailed diagnostics.
+
+### Restarting MCP servers in Cursor
+
+**Cmd+Shift+P** → "Developer: Reload Window" restarts all MCP servers. You can also toggle individual servers off and on in Cursor Settings > MCP.
 
 ---
 

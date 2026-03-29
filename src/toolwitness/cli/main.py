@@ -39,6 +39,37 @@ CLASSIFICATION_COLORS = {
     "unmonitored": "white",
 }
 
+_CURSOR_RULE_TEMPLATE = """\
+# ToolWitness auto-verification
+
+## When this applies
+
+After the agent uses **any tool from a ToolWitness-proxied MCP server**
+(e.g. filesystem-monitored, or any server wrapped with `toolwitness proxy`),
+the agent **must** call `tw_verify_response` before finishing its turn.
+
+## What to do
+
+1. Complete your response as normal — include all information from the tool output.
+2. Before ending your turn, call the `tw_verify_response` MCP tool with your
+   **complete response text** as the `response_text` argument.
+3. If the verification returns `has_failures: true`, review the evidence and
+   correct any inaccuracies in a follow-up message.
+
+## Why
+
+ToolWitness compares what tools actually returned against what the agent tells
+the user. This catches fabrication (wrong data), embellishment (unsupported
+extra claims), and skipped tools (claiming a tool ran when it didn't).
+Results appear in the ToolWitness dashboard at http://localhost:8321.
+
+## Important
+
+- Do NOT skip verification to save time — it takes < 1 second.
+- Do NOT modify or summarize tool output before verifying.
+- The `response_text` should be your full response, not a subset.
+"""
+
 
 @click.group()
 @click.version_option(version=__version__, prog_name="toolwitness")
@@ -407,8 +438,21 @@ def _send_digest(config: ToolWitnessConfig, report: Any) -> None:
     show_default=True,
     help="Output config file path.",
 )
-def init(output: str) -> None:
-    """Create a toolwitness.yaml configuration file."""
+@click.option(
+    "--cursor-rule", is_flag=True, default=False,
+    help="Create a Cursor rule for automatic agent self-verification.",
+)
+def init(output: str, cursor_rule: bool) -> None:
+    """Create configuration files for ToolWitness.
+
+    Without flags, creates toolwitness.yaml. With --cursor-rule, creates
+    a Cursor rule that tells agents to automatically verify their
+    responses after using monitored tools.
+    """
+    if cursor_rule:
+        _init_cursor_rule()
+        return
+
     if Path(output).exists() and not click.confirm(f"{output} already exists. Overwrite?"):
         return
 
@@ -417,6 +461,27 @@ def init(output: str) -> None:
 
     Path(output).write_text(content)
     click.echo(f"Created {output}")
+
+
+def _init_cursor_rule() -> None:
+    """Write the ToolWitness auto-verify Cursor rule to .cursor/rules/."""
+    rules_dir = Path.cwd() / ".cursor" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+
+    rule_path = rules_dir / "toolwitness-verify.mdc"
+
+    if rule_path.exists() and not click.confirm(
+        f"{rule_path} already exists. Overwrite?"
+    ):
+        return
+
+    rule_path.write_text(_CURSOR_RULE_TEMPLATE)
+    click.echo(f"Created {rule_path}")
+    click.echo(
+        "\nThe agent will now call tw_verify_response automatically after "
+        "using monitored tools. Verification results appear in the dashboard "
+        "at http://localhost:8321"
+    )
 
 
 @cli.command()
@@ -623,11 +688,18 @@ def verify(
     "--db", default=None,
     help="SQLite database path (defaults to ~/.toolwitness/toolwitness.db).",
 )
-def serve(db: str | None) -> None:
+@click.option(
+    "--dashboard-port", default=8321, show_default=True,
+    help="Port for the embedded dashboard (0 to disable).",
+)
+def serve(db: str | None, dashboard_port: int) -> None:
     """Start the ToolWitness MCP verification server.
 
     Exposes verification tools via the Model Context Protocol so agents
     can self-check their responses against proxy-recorded tool executions.
+
+    Also starts an embedded dashboard at http://localhost:8321 (override
+    with --dashboard-port, or set to 0 to disable).
 
     Configure in Cursor's mcp.json::
 
@@ -650,7 +722,7 @@ def serve(db: str | None) -> None:
         )
         raise SystemExit(1)
 
-    run_server(db_path=db)
+    run_server(db_path=db, dashboard_port=dashboard_port)
 
 
 @cli.command(name="export")
@@ -897,6 +969,232 @@ def _evaluate_fail_condition(
 
     click.echo(f"Cannot parse condition: {condition}")
     return False
+
+
+@cli.command()
+@click.pass_context
+def doctor(ctx: click.Context) -> None:
+    """Check that ToolWitness is set up correctly.
+
+    Runs prerequisite checks for the proxy, verification server, database,
+    and MCP configuration. Use this when verification returns 0 executions
+    or the proxy appears to not be running.
+    """
+    config = ctx.obj["config"]
+    all_ok = True
+
+    def _pass(msg: str) -> None:
+        click.echo(click.style("  ✓ ", fg="green") + msg)
+
+    def _fail(msg: str, fix: str) -> None:
+        nonlocal all_ok
+        all_ok = False
+        click.echo(click.style("  ✗ ", fg="red", bold=True) + msg)
+        click.echo(click.style("    → ", fg="yellow") + fix)
+
+    def _warn(msg: str) -> None:
+        click.echo(click.style("  ⚠ ", fg="yellow") + msg)
+
+    click.echo(click.style("\nToolWitness Doctor\n", bold=True))
+
+    # 1. Python version
+    import platform
+    py_version = platform.python_version_tuple()
+    py_str = platform.python_version()
+    if int(py_version[0]) >= 3 and int(py_version[1]) >= 10:
+        _pass(f"Python {py_str} (>= 3.10 required)")
+    else:
+        _fail(
+            f"Python {py_str} (>= 3.10 required)",
+            "Install Python 3.10+: brew install python@3.12",
+        )
+
+    # 2. toolwitness binary
+    tw_path = shutil.which("toolwitness")
+    if tw_path:
+        _pass(f"toolwitness binary: {tw_path}")
+    else:
+        _fail(
+            "toolwitness binary not found on PATH",
+            "Run: pip install toolwitness — then check `which toolwitness`",
+        )
+
+    # 3. MCP SDK
+    try:
+        import mcp  # noqa: F401
+        _pass("MCP SDK installed (required for `toolwitness serve`)")
+    except ImportError:
+        _fail(
+            "MCP SDK not installed",
+            "Run: pip install 'toolwitness[mcp]'  or  pip install mcp",
+        )
+
+    # 4. Node / npx
+    npx_path = shutil.which("npx")
+    if npx_path:
+        _pass(f"npx available: {npx_path}")
+    else:
+        _fail(
+            "npx not found on PATH (needed for MCP filesystem server)",
+            "Install Node.js: brew install node",
+        )
+
+    # 5. SQLite database
+    db_path = Path(config.db_path)
+    if db_path.exists():
+        _pass(f"Database exists: {db_path}")
+        try:
+            test_storage = SQLiteStorage(db_path)
+            test_storage.close()
+            _pass("Database is readable")
+        except Exception as exc:
+            _fail(f"Database not readable: {exc}", "Check file permissions on the .db file")
+    else:
+        _warn(
+            f"Database not found at {db_path} — it will be created on first proxy run"
+        )
+
+    # 6. Recent execution data
+    if db_path.exists():
+        try:
+            test_storage = SQLiteStorage(db_path)
+            total_rows = test_storage.query_executions(limit=10000)
+            test_storage.close()
+
+            if total_rows:
+                last_ts = max(r.get("timestamp", 0) for r in total_rows)
+                ago = time.time() - last_ts
+                if ago < 3600:
+                    _pass(
+                        f"{len(total_rows)} execution(s) recorded, "
+                        f"last {_doctor_time_ago(ago)} ago"
+                    )
+                else:
+                    _warn(
+                        f"{len(total_rows)} execution(s) recorded, but "
+                        f"last was {_doctor_time_ago(ago)} ago — proxy may not be running"
+                    )
+            else:
+                _fail(
+                    "Database has 0 recorded executions",
+                    "The proxy has never recorded a tool call. "
+                    "Make sure filesystem-monitored is running in Cursor Settings → MCP.",
+                )
+        except Exception as exc:
+            _fail(f"Could not query executions: {exc}", "Database may be corrupted")
+
+    # 7. MCP config files
+    cursor_global = Path.home() / ".cursor" / "mcp.json"
+    found_proxy = False
+    found_serve = False
+    duplicate_warning = False
+
+    mcp_configs: list[tuple[str, Path]] = [
+        ("Global", cursor_global),
+    ]
+
+    cwd_project = Path.cwd() / ".cursor" / "mcp.json"
+    if cwd_project.exists():
+        mcp_configs.append(("Project", cwd_project))
+
+    for label, config_path in mcp_configs:
+        if not config_path.exists():
+            continue
+        try:
+            mcp_data = json.loads(config_path.read_text())
+            servers = mcp_data.get("mcpServers", {})
+
+            for _name, server_cfg in servers.items():
+                args = server_cfg.get("args", [])
+                if "proxy" in args:
+                    if found_proxy:
+                        duplicate_warning = True
+                    found_proxy = True
+                if "serve" in args:
+                    if found_serve:
+                        duplicate_warning = True
+                    found_serve = True
+        except Exception:
+            _warn(f"{label} MCP config at {config_path} could not be parsed")
+
+    if found_proxy:
+        _pass("MCP proxy server configured")
+    else:
+        _fail(
+            "No MCP proxy server found in Cursor config",
+            'Add a "toolwitness proxy" entry to ~/.cursor/mcp.json — '
+            "see: https://vcrosby22.github.io/toolwitness/getting-started/#mcp-proxy",
+        )
+
+    if found_serve:
+        _pass("MCP verification server (toolwitness serve) configured")
+    else:
+        _fail(
+            "No MCP verification server found in Cursor config",
+            'Add a "toolwitness serve" entry to ~/.cursor/mcp.json — '
+            "see: https://vcrosby22.github.io/toolwitness/getting-started/#close-the-loop--verification-bridge",
+        )
+
+    if duplicate_warning:
+        _warn(
+            "Proxy or serve defined in BOTH global and project MCP configs — "
+            "this can cause Cursor to launch duplicate instances or fail to start. "
+            "Keep one definition (preferably global)."
+        )
+
+    # 8. Dashboard reachability
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://127.0.0.1:8321/api/health", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            if resp.status == 200:
+                _pass("Dashboard reachable at http://localhost:8321")
+            else:
+                _warn("Dashboard returned non-200 status")
+    except Exception:
+        _warn(
+            "Dashboard not reachable at http://localhost:8321 — "
+            "it starts automatically with `toolwitness serve`. "
+            "Check that the toolwitness MCP server is running in "
+            "Cursor Settings → MCP."
+        )
+
+    # 9. Auto-verify Cursor rule
+    rule_path = Path.cwd() / ".cursor" / "rules" / "toolwitness-verify.mdc"
+    if rule_path.exists():
+        _pass("Auto-verify Cursor rule installed")
+    else:
+        _warn(
+            "No auto-verify Cursor rule found. Without it, the agent won't "
+            "call tw_verify_response automatically. "
+            "Run: toolwitness init --cursor-rule"
+        )
+
+    # Summary
+    click.echo("")
+    if all_ok:
+        click.echo(click.style("All checks passed.", fg="green", bold=True))
+    else:
+        click.echo(
+            click.style(
+                "Some checks failed — fix the issues above and re-run "
+                "`toolwitness doctor`.",
+                fg="red",
+                bold=True,
+            )
+        )
+        raise SystemExit(1)
+
+
+def _doctor_time_ago(seconds: float) -> str:
+    """Human-readable duration for doctor output."""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    if seconds < 3600:
+        return f"{int(seconds / 60)}m"
+    if seconds < 86400:
+        return f"{int(seconds / 3600)}h"
+    return f"{int(seconds / 86400)}d"
 
 
 def _open_storage(
