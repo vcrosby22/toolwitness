@@ -106,6 +106,24 @@ graph LR
 
 ---
 
+## Why Fabrication Happens: Context Rot
+
+Understanding *what* ToolWitness detects is important. Understanding *why* these failures occur helps you prevent them.
+
+The primary driver of fabrication in multi-tool sessions is **context rot** — the degradation of LLM accuracy as the context window fills. Three mechanisms contribute:
+
+1. **Attention dilution** — transformer attention spreads thinner as token count grows, reducing the model's ability to focus on any single tool output
+2. **Positional bias** — models attend more to tokens at the start and end of context; tool outputs in the middle get less attention (the ["lost in the middle" effect](https://arxiv.org/abs/2307.03172))
+3. **Noise scaling** — each additional tool call adds redundancy and loose associations that compound faster than useful signal
+
+The result: after several tool calls, the agent can *see* earlier tool outputs in its context but can't reliably *use* them. It fills gaps from training knowledge or confuses data across calls — producing fabrications that look plausible but contradict what the tools actually returned.
+
+Context rot is silent. No errors, no crashes — just gradually less faithful responses. This is precisely why ToolWitness exists: to catch what the agent itself cannot detect.
+
+For mitigation strategies and fixes, see the [Remediation Guide](remediation.md#understanding-context-rot).
+
+---
+
 ## Step 4: Classify
 
 Each tool interaction receives one of five classifications with a confidence score (0.0 to 1.0):

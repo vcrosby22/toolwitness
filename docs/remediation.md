@@ -135,7 +135,7 @@ The tool was called and returned data, but the agent's claims about the result d
 | Root cause | Frequency |
 |---|---|
 | **Prior knowledge conflict** — tool returns data that conflicts with training, model "corrects" it | Common |
-| **Context window overload** — in long sessions, model confuses data from different tool calls | Common |
+| **Context rot** — as sessions grow longer, attention dilutes and the model loses track of earlier tool outputs (see [Understanding context rot](#understanding-context-rot) below) | Common |
 | **Lossy summarization** — model summarizes complex output and introduces errors | Occasional |
 | **Multi-turn drift** — data gets corrupted as it flows through the chain | Occasional |
 
@@ -235,6 +235,41 @@ The dashboard failure detail page includes action buttons:
 | **Mark False Positive** | Flags this verification as incorrect. Feeds the false-positive corpus used to improve classification accuracy. |
 | **Create Issue** | Opens a pre-filled GitHub issue with the failure details, classification, and evidence. |
 | **Add to Test Suite** *(planned)* | Will save the failure as a replay fixture for regression testing. Coming in a future release. |
+
+---
+
+## Understanding Context Rot
+
+**Context rot is the silent degradation of LLM accuracy as the context window fills up.** It's the single most common root cause of FABRICATED classifications in long-running agent sessions. The information isn't wrong or missing — the model just pays less attention to it.
+
+### Why it causes fabrication
+
+Transformer attention is distributed unevenly. Tokens near the beginning and end of the context window receive more focus; information in the middle gets less. A [Stanford study (arXiv:2307.03172)](https://arxiv.org/abs/2307.03172) found that the same facts placed at position 1 in retrieved context yield 75% accuracy, but at position 10, accuracy drops to 55% — based entirely on *position*, not content quality.
+
+In practice, this means: after 5–10 tool calls in a session, earlier tool outputs get pushed into the low-attention middle zone. The agent can see the tool was called (the message is there), but can't effectively attend to the actual data. So it fills in from training knowledge — or confuses data across different tool calls.
+
+This is why ToolWitness testing found **100% fabrication rate** when agents were tested with 5 sequential tool calls (overloaded context), but **0% fabrication** with a single tool call (clean, short context). Same tools, same data, same agent — the only variable was context length.
+
+### Three causes of context rot
+
+| Cause | What happens |
+|-------|-------------|
+| **Attention dilution** | At 100K tokens the model tracks ~10 billion pairwise relationships. Attention spreads thinner as context grows. |
+| **Noise scaling** | Redundancy, loose associations, and subtle contradictions compound faster than useful signal. |
+| **Positional bias** | The "lost-in-the-middle" problem — models perform best when relevant data sits at the very start or very end. |
+
+### What you can do about it
+
+These fixes complement the FABRICATED remediation steps above:
+
+| Strategy | How it helps | Effort |
+|----------|-------------|--------|
+| **Trim conversation history** | Keep only the current tool result visible; archive earlier turns | Low |
+| **Break into sub-agents** | Each sub-agent gets a clean context with only its tools | Medium |
+| **Chunk long tool outputs** | Process results in smaller pieces instead of one massive return | Medium |
+| **Monitor context length** | Track token count per session; correlate with failure rate | Low |
+
+The pattern: fabrication is not random misbehavior. It's a predictable consequence of how attention works in transformers. Shorter contexts produce more faithful responses. ToolWitness detects the symptoms; managing context length prevents the cause.
 
 ---
 

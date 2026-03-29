@@ -20,6 +20,10 @@ tools actually returned.
 | **SKIPPED** | Agent claimed a tool ran but it never did | No execution receipt exists |
 | **UNMONITORED** | Tool wasn't wrapped by ToolWitness | Outside monitoring scope |
 
+## Why these failures happen
+
+The primary driver of agent fabrication is **context rot** — the silent degradation of LLM accuracy as the context window fills. After several tool calls, earlier outputs drift into the low-attention "middle zone" of the context. The agent can see the data was returned but can't reliably use it, so it fills gaps from training knowledge or confuses results across calls. No errors, no crashes — just gradually less faithful responses. [Learn more →](https://vcrosby22.github.io/toolwitness/remediation/#understanding-context-rot)
+
 ## What ToolWitness sees vs. doesn't see
 
 | ToolWitness sees | ToolWitness does NOT see |
