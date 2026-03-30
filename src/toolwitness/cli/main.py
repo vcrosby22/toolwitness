@@ -40,7 +40,60 @@ CLASSIFICATION_COLORS = {
 }
 
 _CURSOR_RULE_TEMPLATE = """\
-# ToolWitness auto-verification
+# ToolWitness auto-verification (full coverage)
+
+## When this applies
+
+After the agent uses **any tool** — including Cursor native tools (Read, Shell,
+Grep, Glob, SemanticSearch) and ToolWitness-proxied MCP servers — the agent
+**must** call `tw_verify_response` before finishing its turn.
+
+## What to do
+
+1. Complete your response as normal — include all information from the tool output.
+2. Collect the raw outputs from every tool you used this turn into a `tool_outputs`
+   array. Each entry is an object with `tool` (name) and `output` (raw text).
+   **Skip** Write, StrReplace, and Delete outputs (they are actions, not data).
+3. Call `tw_verify_response` with:
+   - `response_text`: your complete response text
+   - `tool_outputs`: the array from step 2
+4. If the verification returns `has_failures: true`, review the evidence and
+   correct any inaccuracies in a follow-up message.
+
+## Example tool_outputs format
+
+```json
+[
+  {"tool": "Read", "output": "contents of the file..."},
+  {"tool": "Shell", "output": "command output..."},
+  {"tool": "Grep", "output": "search results..."}
+]
+```
+
+## Why
+
+ToolWitness compares what tools actually returned against what the agent tells
+the user. This catches fabrication (wrong data), embellishment (unsupported
+extra claims), and skipped tools (claiming a tool ran when it didn't).
+Results appear in the ToolWitness dashboard at http://localhost:8321.
+
+## Privacy
+
+Tool outputs are compared in memory and discarded — only the verification
+verdict is stored. No raw file contents, shell outputs, or search results
+are persisted. All processing is local.
+
+## Important
+
+- Do NOT skip verification to save time — it takes < 1 second.
+- Do NOT modify or summarize tool output before verifying.
+- The `response_text` should be your full response, not a subset.
+- Include full tool outputs — truncation reduces verification accuracy.
+"""
+
+
+_CURSOR_RULE_MINIMAL_TEMPLATE = """\
+# ToolWitness auto-verification (MCP only)
 
 ## When this applies
 
@@ -68,6 +121,57 @@ Results appear in the ToolWitness dashboard at http://localhost:8321.
 - Do NOT skip verification to save time — it takes < 1 second.
 - Do NOT modify or summarize tool output before verifying.
 - The `response_text` should be your full response, not a subset.
+"""
+
+
+_LAUNCHD_PLIST_TEMPLATE = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.toolwitness.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{toolwitness_bin}</string>
+        <string>daemon</string>
+        <string>start</string>
+        <string>--proxy-port</string>
+        <string>{proxy_port}</string>
+        <string>--serve-port</string>
+        <string>{serve_port}</string>
+        <string>--dashboard-port</string>
+        <string>{dashboard_port}</string>
+        <string>--transport</string>
+        <string>{transport}</string>
+        <string>--</string>
+{server_command_items}
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>{log_dir}/daemon.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{log_dir}/daemon.stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>{home}</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{path_env}</string>
+    </dict>
+</dict>
+</plist>
 """
 
 
@@ -442,15 +546,70 @@ def _send_digest(config: ToolWitnessConfig, report: Any) -> None:
     "--cursor-rule", is_flag=True, default=False,
     help="Create a Cursor rule for automatic agent self-verification.",
 )
-def init(output: str, cursor_rule: bool) -> None:
+@click.option(
+    "--minimal", is_flag=True, default=False,
+    help="With --cursor-rule: MCP-only verification (no native tool self-report).",
+)
+@click.option(
+    "--claude-desktop", is_flag=True, default=False,
+    help="Show system prompt snippet for Claude Desktop custom instructions.",
+)
+@click.option(
+    "--system-prompt", is_flag=True, default=False,
+    help="Show generic LLM system prompt for any AI assistant.",
+)
+@click.option(
+    "--launchd", is_flag=True, default=False,
+    help="Generate a macOS launchd plist for the daemon.",
+)
+@click.option(
+    "--cursor-config", is_flag=True, default=False,
+    help="Show Cursor MCP config for HTTP transport.",
+)
+@click.option(
+    "--server-command", default=None,
+    help="MCP server command for launchd plist (e.g. 'npx -y @mcp/server /path').",
+)
+def init(
+    output: str,
+    cursor_rule: bool,
+    minimal: bool,
+    claude_desktop: bool,
+    system_prompt: bool,
+    launchd: bool,
+    cursor_config: bool,
+    server_command: str | None,
+) -> None:
     """Create configuration files for ToolWitness.
 
-    Without flags, creates toolwitness.yaml. With --cursor-rule, creates
-    a Cursor rule that tells agents to automatically verify their
-    responses after using monitored tools.
+    Without flags, creates toolwitness.yaml. Use flags for specific outputs:
+
+    \b
+      --cursor-rule       Cursor rule for auto-verification (full coverage).
+      --cursor-rule --minimal   Cursor rule (MCP-only, no native tool self-report).
+      --claude-desktop    System prompt snippet for Claude Desktop.
+      --system-prompt     Generic LLM instruction text (copy-paste).
+      --launchd           macOS launchd plist for the daemon.
+      --cursor-config     Cursor MCP config snippet for HTTP transport.
     """
     if cursor_rule:
-        _init_cursor_rule()
+        _init_cursor_rule(minimal=minimal)
+        return
+
+    if claude_desktop:
+        _show_claude_desktop_instructions(minimal=minimal)
+        return
+
+    if system_prompt:
+        _show_system_prompt_instructions(minimal=minimal)
+        return
+
+    if launchd:
+        _init_launchd(server_command)
+        return
+
+    if cursor_config:
+        _show_cursor_config()
         return
 
     if Path(output).exists() and not click.confirm(f"{output} already exists. Overwrite?"):
@@ -463,7 +622,7 @@ def init(output: str, cursor_rule: bool) -> None:
     click.echo(f"Created {output}")
 
 
-def _init_cursor_rule() -> None:
+def _init_cursor_rule(*, minimal: bool = False) -> None:
     """Write the ToolWitness auto-verify Cursor rule to .cursor/rules/."""
     rules_dir = Path.cwd() / ".cursor" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
@@ -475,12 +634,150 @@ def _init_cursor_rule() -> None:
     ):
         return
 
-    rule_path.write_text(_CURSOR_RULE_TEMPLATE)
+    template = _CURSOR_RULE_MINIMAL_TEMPLATE if minimal else _CURSOR_RULE_TEMPLATE
+    rule_path.write_text(template)
     click.echo(f"Created {rule_path}")
+
+    level = "MCP-only" if minimal else "full coverage"
     click.echo(
-        "\nThe agent will now call tw_verify_response automatically after "
-        "using monitored tools. Verification results appear in the dashboard "
-        "at http://localhost:8321"
+        f"\nInstalled {level} verification rule.\n"
+        "Your agent will now verify tool outputs automatically. "
+        "Verification results appear in the dashboard at http://localhost:8321"
+    )
+    if not minimal:
+        click.echo(
+            "\nThe agent will include native tool outputs (Read, Shell, Grep, etc.) "
+            "in verification calls. Tool outputs are compared in memory and "
+            "discarded — only verdicts are stored.\n"
+            "To reduce to MCP-only: toolwitness init --cursor-rule --minimal"
+        )
+
+
+_SYSTEM_PROMPT_FULL = """\
+## ToolWitness auto-verification
+
+After using any tool, you MUST call the `tw_verify_response` MCP tool before
+finishing your turn. Include:
+
+- `response_text`: your complete response text
+- `tool_outputs`: array of objects, each with `tool` (name) and `output`
+  (raw tool output text). Skip Write/Delete actions.
+
+Example:
+  tw_verify_response(
+    response_text="...",
+    tool_outputs=[
+      {"tool": "read_file", "output": "file contents..."},
+      {"tool": "run_command", "output": "command output..."}
+    ]
+  )
+
+If verification returns `has_failures: true`, review and correct inaccuracies.
+
+Tool outputs are compared in memory and discarded. Only verdicts are stored.
+All processing is local — no data leaves your machine.
+"""
+
+_SYSTEM_PROMPT_MINIMAL = """\
+## ToolWitness auto-verification
+
+After using any tool from a ToolWitness-proxied MCP server, you MUST call
+the `tw_verify_response` MCP tool before finishing your turn with:
+
+- `response_text`: your complete response text
+
+If verification returns `has_failures: true`, review and correct inaccuracies.
+"""
+
+
+def _show_claude_desktop_instructions(*, minimal: bool = False) -> None:
+    """Print a system prompt snippet for Claude Desktop custom instructions."""
+    prompt = _SYSTEM_PROMPT_MINIMAL if minimal else _SYSTEM_PROMPT_FULL
+    level = "MCP-only" if minimal else "full coverage"
+    click.echo(f"# Claude Desktop custom instructions ({level})")
+    click.echo(f"# Add this to your project's custom instructions in Claude Desktop:\n")
+    click.echo(prompt)
+
+
+def _show_system_prompt_instructions(*, minimal: bool = False) -> None:
+    """Print a generic system prompt snippet for any LLM."""
+    prompt = _SYSTEM_PROMPT_MINIMAL if minimal else _SYSTEM_PROMPT_FULL
+    level = "MCP-only" if minimal else "full coverage"
+    click.echo(f"# Generic LLM system prompt ({level})")
+    click.echo(f"# Add this to your agent's system prompt:\n")
+    click.echo(prompt)
+
+
+def _init_launchd(server_command: str | None = None) -> None:
+    """Generate a macOS launchd plist for the ToolWitness daemon."""
+    import os
+
+    tw_bin = shutil.which("toolwitness") or "/usr/local/bin/toolwitness"
+    home = str(Path.home())
+    log_dir = str(Path.home() / ".toolwitness")
+    path_env = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
+
+    if not server_command:
+        npx_path = shutil.which("npx") or "npx"
+        server_command = f"{npx_path} -y @modelcontextprotocol/server-filesystem {home}"
+        click.echo(
+            f"No --server-command provided, using default:\n  {server_command}\n"
+        )
+
+    cmd_parts = server_command.split()
+    server_command_items = "\n".join(
+        f"        <string>{part}</string>" for part in cmd_parts
+    )
+
+    plist_content = _LAUNCHD_PLIST_TEMPLATE.format(
+        toolwitness_bin=tw_bin,
+        proxy_port=8323,
+        serve_port=8322,
+        dashboard_port=8321,
+        transport="sse",
+        server_command_items=server_command_items,
+        log_dir=log_dir,
+        home=home,
+        path_env=path_env,
+    )
+
+    plist_dir = Path.home() / "Library" / "LaunchAgents"
+    plist_dir.mkdir(parents=True, exist_ok=True)
+    plist_path = plist_dir / "com.toolwitness.daemon.plist"
+
+    if plist_path.exists() and not click.confirm(f"{plist_path} already exists. Overwrite?"):
+        return
+
+    plist_path.write_text(plist_content)
+    click.echo(f"Created {plist_path}")
+    click.echo(
+        "\nTo load the daemon now:\n"
+        f"  launchctl load {plist_path}\n\n"
+        "To unload:\n"
+        f"  launchctl unload {plist_path}\n\n"
+        "The daemon will auto-start on login and restart on crash.\n"
+        "Logs: ~/.toolwitness/daemon.stdout.log and daemon.stderr.log"
+    )
+
+
+def _show_cursor_config() -> None:
+    """Print Cursor MCP config for HTTP transport."""
+    config = {
+        "mcpServers": {
+            "filesystem-monitored": {
+                "url": "http://localhost:8323/sse",
+            },
+            "toolwitness": {
+                "url": "http://localhost:8322/sse",
+            },
+        },
+    }
+    click.echo("Add this to your Cursor MCP config (~/.cursor/mcp.json):\n")
+    click.echo(json.dumps(config, indent=2))
+    click.echo(
+        "\nThis replaces the stdio command entries with HTTP URLs.\n"
+        "The daemon must be running for these to work.\n"
+        "Start the daemon: toolwitness daemon start -- npx -y @mcp/server /path"
     )
 
 
@@ -525,10 +822,32 @@ def dashboard(ctx: click.Context, host: str, port: int, db_override: str | None)
     "--session-id", default=None,
     help="Custom session ID for this proxy run.",
 )
+@click.option(
+    "--transport", "-t", default="stdio",
+    type=click.Choice(["stdio", "sse", "streamable-http"]),
+    show_default=True,
+    help="MCP transport. Use 'sse' or 'streamable-http' for independent HTTP lifecycle.",
+)
+@click.option(
+    "--host", default="127.0.0.1", show_default=True,
+    help="Bind address for HTTP transports (ignored for stdio).",
+)
+@click.option(
+    "--port", "-p", "proxy_port", default=8323, show_default=True,
+    help="Port for HTTP transports (ignored for stdio).",
+)
+@click.option(
+    "--max-restarts", default=3, show_default=True,
+    help="Max child process restarts before giving up.",
+)
 def proxy(
     server_command: tuple[str, ...],
     db: str | None,
     session_id: str | None,
+    transport: str,
+    host: str,
+    proxy_port: int,
+    max_restarts: int,
 ) -> None:
     """Run as a transparent MCP proxy. Monitors all tool calls.
 
@@ -536,7 +855,13 @@ def proxy(
     dashboard and CLI.  In your MCP config, replace the server command
     with ``toolwitness proxy -- <original command>``.
 
-    Example Cursor config (.cursor/mcp.json)::
+    \b
+    Transports:
+      stdio            Standard MCP stdio (Cursor spawns the process).
+      sse              HTTP/SSE server — survives Cursor restarts.
+      streamable-http  Streamable HTTP — modern MCP transport.
+
+    Example Cursor config (stdio)::
 
         {
           "mcpServers": {
@@ -546,22 +871,49 @@ def proxy(
             }
           }
         }
+
+    Example (HTTP/SSE — independent lifecycle)::
+
+        {
+          "mcpServers": {
+            "my-server": { "url": "http://localhost:8323/sse" }
+          }
+        }
     """
     import asyncio
-
-    from toolwitness.proxy.stdio import run_proxy
 
     cmd = list(server_command)
     if not cmd:
         click.echo("Error: no server command provided.", err=True)
         raise SystemExit(1)
 
-    click.echo(
-        f"ToolWitness proxy → {' '.join(cmd)}", err=True,
-    )
+    if transport == "stdio":
+        from toolwitness.proxy.stdio import run_proxy
 
-    exit_code = asyncio.run(run_proxy(cmd, db_path=db, session_id=session_id))
-    raise SystemExit(exit_code)
+        click.echo(f"ToolWitness proxy → {' '.join(cmd)}", err=True)
+        exit_code = asyncio.run(
+            run_proxy(cmd, db_path=db, session_id=session_id, max_child_restarts=max_restarts),
+        )
+        raise SystemExit(exit_code)
+    else:
+        from toolwitness.proxy.http import run_http_proxy
+
+        click.echo(
+            f"ToolWitness proxy ({transport}) → {' '.join(cmd)} "
+            f"on http://{host}:{proxy_port}",
+            err=True,
+        )
+        asyncio.run(
+            run_http_proxy(
+                cmd,
+                db_path=db,
+                session_id=session_id,
+                transport=transport,
+                host=host,
+                port=proxy_port,
+                max_child_restarts=max_restarts,
+            ),
+        )
 
 
 @cli.command()
@@ -692,7 +1044,27 @@ def verify(
     "--dashboard-port", default=8321, show_default=True,
     help="Port for the embedded dashboard (0 to disable).",
 )
-def serve(db: str | None, dashboard_port: int) -> None:
+@click.option(
+    "--transport", "-t", default="stdio",
+    type=click.Choice(["stdio", "sse", "streamable-http"]),
+    show_default=True,
+    help="MCP transport. Use 'sse' or 'streamable-http' for an independent HTTP lifecycle.",
+)
+@click.option(
+    "--host", default="127.0.0.1", show_default=True,
+    help="Bind address for HTTP transports (ignored for stdio).",
+)
+@click.option(
+    "--port", "-p", "serve_port", default=8322, show_default=True,
+    help="Port for HTTP transports (ignored for stdio).",
+)
+def serve(
+    db: str | None,
+    dashboard_port: int,
+    transport: str,
+    host: str,
+    serve_port: int,
+) -> None:
     """Start the ToolWitness MCP verification server.
 
     Exposes verification tools via the Model Context Protocol so agents
@@ -701,16 +1073,16 @@ def serve(db: str | None, dashboard_port: int) -> None:
     Also starts an embedded dashboard at http://localhost:8321 (override
     with --dashboard-port, or set to 0 to disable).
 
-    Configure in Cursor's mcp.json::
+    Transports:
 
-        {
-          "mcpServers": {
-            "toolwitness": {
-              "command": "/path/to/toolwitness",
-              "args": ["serve"]
-            }
-          }
-        }
+    \b
+      stdio            Standard MCP stdio (Cursor spawns the process).
+      sse              HTTP/SSE server — survives Cursor restarts.
+      streamable-http  Streamable HTTP — modern MCP transport.
+
+    With sse/streamable-http, configure Cursor with a URL instead of a command::
+
+        { "mcpServers": { "toolwitness": { "url": "http://localhost:8322/sse" } } }
     """
     try:
         from toolwitness.mcp_server.server import run_server
@@ -722,7 +1094,254 @@ def serve(db: str | None, dashboard_port: int) -> None:
         )
         raise SystemExit(1)
 
-    run_server(db_path=db, dashboard_port=dashboard_port)
+    if transport != "stdio":
+        click.echo(
+            f"ToolWitness serve ({transport}) → http://{host}:{serve_port}", err=True,
+        )
+
+    run_server(
+        db_path=db,
+        dashboard_port=dashboard_port,
+        transport=transport,
+        host=host,
+        port=serve_port,
+    )
+
+
+@cli.group()
+def daemon() -> None:
+    """Manage the ToolWitness daemon (HTTP proxy + verification server).
+
+    The daemon runs both the proxy and serve processes as a single
+    long-lived unit with HTTP transports, surviving Cursor restarts.
+
+    \b
+    Commands:
+      start   Start the daemon (foreground by default).
+      stop    Stop a running daemon by PID file.
+      status  Show daemon status.
+    """
+
+
+@daemon.command(name="start")
+@click.argument("server_command", nargs=-1, required=True)
+@click.option("--db", default=None, help="SQLite database path.")
+@click.option(
+    "--proxy-port", default=8323, show_default=True,
+    help="Port for the HTTP proxy.",
+)
+@click.option(
+    "--serve-port", default=8322, show_default=True,
+    help="Port for the verification server.",
+)
+@click.option(
+    "--dashboard-port", default=8321, show_default=True,
+    help="Port for the dashboard (0 to disable).",
+)
+@click.option(
+    "--transport", "-t", default="sse",
+    type=click.Choice(["sse", "streamable-http"]),
+    show_default=True,
+    help="MCP transport for both proxy and serve.",
+)
+@click.option(
+    "--host", default="127.0.0.1", show_default=True,
+    help="Bind address.",
+)
+@click.option(
+    "--pid-file", default=None,
+    help="PID file path (defaults to ~/.toolwitness/daemon.pid).",
+)
+def daemon_start(
+    server_command: tuple[str, ...],
+    db: str | None,
+    proxy_port: int,
+    serve_port: int,
+    dashboard_port: int,
+    transport: str,
+    host: str,
+    pid_file: str | None,
+) -> None:
+    """Start the ToolWitness daemon.
+
+    Runs both the HTTP proxy (wrapping the given MCP server) and the
+    verification server as a single managed process.
+
+    Example::
+
+        toolwitness daemon start -- npx -y @modelcontextprotocol/server-filesystem /path
+    """
+    import asyncio
+    import os
+    import signal
+
+    cmd = list(server_command)
+    if not cmd:
+        click.echo("Error: no server command provided.", err=True)
+        raise SystemExit(1)
+
+    pid_path = Path(pid_file) if pid_file else Path.home() / ".toolwitness" / "daemon.pid"
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if pid_path.exists():
+        existing_pid = pid_path.read_text().strip()
+        try:
+            os.kill(int(existing_pid), 0)
+            click.echo(
+                f"Daemon already running (PID {existing_pid}). "
+                f"Stop it first: toolwitness daemon stop",
+                err=True,
+            )
+            raise SystemExit(1)
+        except (OSError, ValueError):
+            pid_path.unlink(missing_ok=True)
+
+    pid_path.write_text(str(os.getpid()))
+
+    click.echo(f"ToolWitness daemon starting (PID {os.getpid()})", err=True)
+    click.echo(f"  Proxy ({transport}):  http://{host}:{proxy_port}", err=True)
+    click.echo(f"  Serve ({transport}):  http://{host}:{serve_port}", err=True)
+    if dashboard_port:
+        click.echo(f"  Dashboard:           http://{host}:{dashboard_port}", err=True)
+    click.echo(f"  Wrapping: {' '.join(cmd)}", err=True)
+
+    async def _run_daemon() -> None:
+        import contextlib
+
+        from toolwitness.mcp_server.server import (
+            _start_dashboard_thread,
+            configure,
+            mcp as serve_mcp,
+        )
+        from toolwitness.proxy.http import run_http_proxy
+
+        configure(db)
+        if dashboard_port:
+            _start_dashboard_thread(db, port=dashboard_port, host=host)
+
+        stop_event = asyncio.Event()
+
+        def _handle_signal() -> None:
+            stop_event.set()
+
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, _handle_signal)
+
+        proxy_task = asyncio.create_task(
+            run_http_proxy(
+                cmd,
+                db_path=db,
+                transport=transport,
+                host=host,
+                port=proxy_port,
+            ),
+        )
+
+        serve_task = asyncio.create_task(
+            asyncio.to_thread(
+                serve_mcp.run,
+                transport=transport,
+                host=host,
+                port=serve_port,
+            ),
+        )
+
+        try:
+            done, pending = await asyncio.wait(
+                [proxy_task, serve_task, asyncio.create_task(stop_event.wait())],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+        finally:
+            pid_path.unlink(missing_ok=True)
+            click.echo("Daemon stopped.", err=True)
+
+    try:
+        asyncio.run(_run_daemon())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        pid_path.unlink(missing_ok=True)
+
+
+@daemon.command(name="stop")
+@click.option(
+    "--pid-file", default=None,
+    help="PID file path (defaults to ~/.toolwitness/daemon.pid).",
+)
+def daemon_stop(pid_file: str | None) -> None:
+    """Stop a running ToolWitness daemon."""
+    import os
+    import signal
+
+    pid_path = Path(pid_file) if pid_file else Path.home() / ".toolwitness" / "daemon.pid"
+
+    if not pid_path.exists():
+        click.echo("No daemon PID file found. Is the daemon running?")
+        return
+
+    pid_str = pid_path.read_text().strip()
+    try:
+        pid = int(pid_str)
+    except ValueError:
+        click.echo(f"Invalid PID in {pid_path}: {pid_str}")
+        pid_path.unlink(missing_ok=True)
+        return
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        click.echo(f"Sent SIGTERM to daemon (PID {pid}).")
+    except ProcessLookupError:
+        click.echo(f"Daemon (PID {pid}) is not running. Cleaning up PID file.")
+        pid_path.unlink(missing_ok=True)
+    except PermissionError:
+        click.echo(f"Permission denied sending signal to PID {pid}.")
+
+
+@daemon.command(name="status")
+@click.option(
+    "--pid-file", default=None,
+    help="PID file path (defaults to ~/.toolwitness/daemon.pid).",
+)
+@click.pass_context
+def daemon_status(ctx: click.Context, pid_file: str | None) -> None:
+    """Show ToolWitness daemon status."""
+    import os
+
+    pid_path = Path(pid_file) if pid_file else Path.home() / ".toolwitness" / "daemon.pid"
+
+    if not pid_path.exists():
+        click.echo("Daemon: not running (no PID file)")
+        return
+
+    pid_str = pid_path.read_text().strip()
+    try:
+        pid = int(pid_str)
+        os.kill(pid, 0)
+        click.echo(f"Daemon: running (PID {pid})")
+    except (ValueError, ProcessLookupError):
+        click.echo(f"Daemon: stale PID file (PID {pid_str} not running)")
+    except PermissionError:
+        click.echo(f"Daemon: running (PID {pid_str}, permission denied for signal)")
+
+    config = ctx.obj.get("config") if ctx.obj else None
+    if config:
+        storage = _open_storage(config)
+        if storage:
+            heartbeat = storage.get_latest_heartbeat()
+            storage.close()
+            if heartbeat:
+                age = time.time() - heartbeat.get("timestamp", 0)
+                click.echo(
+                    f"Proxy heartbeat: {heartbeat.get('status', '?')} "
+                    f"({int(age)}s ago, PID {heartbeat.get('pid', '?')})"
+                )
+            else:
+                click.echo("Proxy heartbeat: no data")
 
 
 @cli.command(name="export")

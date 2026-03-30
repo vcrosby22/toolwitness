@@ -29,6 +29,7 @@ def classify(
     execution: ToolExecution | None,
     *,
     receipt_valid: bool | None = None,
+    semantic_verifier: Any | None = None,
 ) -> VerificationResult:
     """Classify an agent's claim about a tool call.
 
@@ -67,12 +68,18 @@ def classify(
             receipt=execution.receipt,
         )
 
-    if isinstance(execution.output, str):
+    if isinstance(execution.output, str) and semantic_verifier is not None:
+        match_result = semantic_verifier.verify(execution.output, agent_response)
+        verification_method = "semantic"
+    elif isinstance(execution.output, str):
         match_result = text_grounding_match(execution.output, agent_response)
+        verification_method = "structural_grounding"
     else:
         match_result = structural_match(execution.output, agent_response)
+        verification_method = "structural"
 
     evidence = _build_evidence(match_result)
+    evidence["verification_method"] = verification_method
 
     classification, confidence = _score(match_result)
 
@@ -117,6 +124,17 @@ def _score(match: MatchResult) -> tuple[Classification, float]:
 
     ratio = matched / total if total > 0 else 0.0
 
+    # Low-signal guard: when very few values were checked AND the mismatches
+    # come from text-grounding heuristics (quoted phrases, acronyms, etc.),
+    # cap confidence. Concrete structured field mismatches (e.g. size=4096)
+    # are still trusted even on thin evidence.
+    _TEXT_GROUNDING_KEYS = {"quoted", "backtick", "date", "number", "acronym"}
+    _all_heuristic = all(
+        m.get("key", "") in _TEXT_GROUNDING_KEYS or m.get("key", "").startswith("count(")
+        for m in match.mismatched_values
+    ) if match.mismatched_values else False
+    _low_signal = total <= 1 and _all_heuristic
+
     # Missing strings (key identifiers like city names not found in response)
     # may indicate value substitution (said "NYC" instead of "Miami").
     # Weight against total fields from the output, not just matched count.
@@ -129,6 +147,16 @@ def _score(match: MatchResult) -> tuple[Classification, float]:
         if missing_ratio >= 0.3 and mismatched == 0 and ratio < 1.0:
             confidence = 0.65 + missing_ratio * 0.25
             return Classification.FABRICATED, min(confidence, 0.90)
+        # Small outputs (3-5 fields) with high missing ratio: selective
+        # omission is less plausible when half the output is absent.
+        # Requires >= 3 fields to avoid penalizing 1-of-2 reporting.
+        if (
+            missing_ratio >= 0.4
+            and 3 <= total_output_fields <= 5
+            and mismatched == 0
+        ):
+            confidence = 0.60 + missing_ratio * 0.20
+            return Classification.EMBELLISHED, min(confidence, 0.80)
         # Missing + mismatches together → stronger fabrication signal
         if missing_strings > 0 and mismatched > 0:
             confidence = 0.65 + missing_ratio * 0.25
@@ -137,10 +165,14 @@ def _score(match: MatchResult) -> tuple[Classification, float]:
     # Active contradictions (values found but wrong) are strong fabrication signals
     if mismatched > 0 and ratio < 0.5:
         confidence = 0.75 + (1 - ratio) * 0.20
+        if _low_signal:
+            return Classification.EMBELLISHED, min(confidence, 0.60)
         return Classification.FABRICATED, min(confidence, 0.95)
 
     if mismatched > 0 and ratio < 0.8:
         confidence = 0.60 + (1 - ratio) * 0.25
+        if _low_signal:
+            return Classification.EMBELLISHED, min(confidence, 0.60)
         return Classification.FABRICATED, min(confidence, 0.90)
 
     # Omission with no contradictions: selective reporting is okay

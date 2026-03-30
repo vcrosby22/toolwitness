@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS verifications (
     evidence TEXT DEFAULT '{}',
     receipt_id TEXT,
     created_at REAL NOT NULL,
+    source TEXT DEFAULT 'proxy',
     FOREIGN KEY (session_id) REFERENCES sessions(session_id)
 );
 
@@ -100,6 +101,31 @@ CREATE INDEX IF NOT EXISTS idx_handoffs_source
     ON handoffs(source_session_id);
 CREATE INDEX IF NOT EXISTS idx_handoffs_target
     ON handoffs(target_session_id);
+
+CREATE TABLE IF NOT EXISTS proxy_heartbeats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    pid INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'alive',
+    timestamp REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS proxy_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    message TEXT DEFAULT '',
+    timestamp REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_heartbeats_timestamp
+    ON proxy_heartbeats(timestamp);
+CREATE INDEX IF NOT EXISTS idx_heartbeats_session
+    ON proxy_heartbeats(session_id);
+CREATE INDEX IF NOT EXISTS idx_proxy_events_session
+    ON proxy_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_proxy_events_timestamp
+    ON proxy_events(timestamp);
 """
 
 _MIGRATION_SQL = [
@@ -137,6 +163,39 @@ _MIGRATION_SQL = [
         "CREATE INDEX IF NOT EXISTS idx_sessions_source "
         "ON sessions(source)"
     ),
+    (
+        "CREATE TABLE IF NOT EXISTS proxy_heartbeats ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "session_id TEXT NOT NULL,"
+        "pid INTEGER NOT NULL,"
+        "status TEXT NOT NULL DEFAULT 'alive',"
+        "timestamp REAL NOT NULL)"
+    ),
+    (
+        "CREATE TABLE IF NOT EXISTS proxy_events ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "session_id TEXT NOT NULL,"
+        "event_type TEXT NOT NULL,"
+        "message TEXT DEFAULT '',"
+        "timestamp REAL NOT NULL)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS idx_heartbeats_timestamp "
+        "ON proxy_heartbeats(timestamp)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS idx_heartbeats_session "
+        "ON proxy_heartbeats(session_id)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS idx_proxy_events_session "
+        "ON proxy_events(session_id)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS idx_proxy_events_timestamp "
+        "ON proxy_events(timestamp)"
+    ),
+    "ALTER TABLE verifications ADD COLUMN source TEXT DEFAULT 'proxy'",
 ]
 
 
@@ -148,10 +207,11 @@ class SQLiteStorage(StorageBackend):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         self._db_path = path
-        self._conn = sqlite3.connect(str(path))
+        self._conn = sqlite3.connect(str(path), timeout=10.0)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._migrate()
         self._init_schema()
         self._set_permissions()
@@ -198,14 +258,20 @@ class SQLiteStorage(StorageBackend):
         )
         self._conn.commit()
 
-    def save_verification(self, session_id: str, result: VerificationResult) -> None:
+    def save_verification(
+        self,
+        session_id: str,
+        result: VerificationResult,
+        *,
+        source: str = "proxy",
+    ) -> None:
         import time
 
         self._conn.execute(
             """INSERT INTO verifications
                (session_id, tool_name, classification, confidence, evidence,
-                receipt_id, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                receipt_id, created_at, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_id,
                 result.tool_name,
@@ -214,6 +280,7 @@ class SQLiteStorage(StorageBackend):
                 json.dumps(result.evidence, default=str),
                 result.receipt.receipt_id if result.receipt else None,
                 time.time(),
+                source,
             ),
         )
         self._conn.commit()
@@ -544,6 +611,64 @@ class SQLiteStorage(StorageBackend):
         counts["sessions"] = cursor.rowcount
         self._conn.commit()
         return counts
+
+    def save_heartbeat(
+        self,
+        session_id: str,
+        pid: int,
+        status: str = "alive",
+    ) -> None:
+        import time
+
+        self._conn.execute(
+            """INSERT INTO proxy_heartbeats
+               (session_id, pid, status, timestamp)
+               VALUES (?, ?, ?, ?)""",
+            (session_id, pid, status, time.time()),
+        )
+        self._conn.commit()
+
+    def get_latest_heartbeat(self) -> dict[str, Any] | None:
+        cursor = self._conn.execute(
+            "SELECT * FROM proxy_heartbeats ORDER BY timestamp DESC LIMIT 1",
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def save_proxy_event(
+        self,
+        session_id: str,
+        event_type: str,
+        message: str = "",
+    ) -> None:
+        import time
+
+        self._conn.execute(
+            """INSERT INTO proxy_events
+               (session_id, event_type, message, timestamp)
+               VALUES (?, ?, ?, ?)""",
+            (session_id, event_type, message, time.time()),
+        )
+        self._conn.commit()
+
+    def query_proxy_events(
+        self,
+        *,
+        session_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        if session_id:
+            cursor = self._conn.execute(
+                "SELECT * FROM proxy_events WHERE session_id = ? "
+                "ORDER BY timestamp DESC LIMIT ?",
+                (session_id, limit),
+            )
+        else:
+            cursor = self._conn.execute(
+                "SELECT * FROM proxy_events ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            )
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self) -> None:
         self._conn.close()

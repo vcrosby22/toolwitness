@@ -11,7 +11,7 @@ import pytest
 from toolwitness.core.classifier import classify
 from toolwitness.core.monitor import ExecutionMonitor
 from toolwitness.core.receipt import verify_receipt
-from toolwitness.core.types import Classification
+from toolwitness.core.types import Classification, ExecutionReceipt, ToolExecution
 
 FALSE_POSITIVE_CORPUS = [
     {
@@ -399,6 +399,44 @@ FALSE_POSITIVE_CORPUS = [
         "agent_response": "The file is 102,400 bytes with 644 permissions.",
         "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
     },
+    {
+        "name": "contraction_summarization",
+        "tool_output": (
+            "# Primary objectives\n\n"
+            "This repository is the long-term substrate where we collect "
+            "what we learn about Victoria, agents, and Cursor.\n\n"
+            "## Core goal\n\n"
+            "The primary objective is knowledge building: identify and keep "
+            "learnings from conversations, documents, and external artifacts "
+            "so understanding compounds instead of evaporating.\n\n"
+            "## Mechanisms\n\n"
+            "Session continuity via activeContext.md, proactive journaling, "
+            "and knowledge entries in CURSOR_KNOWLEDGE.md."
+        ),
+        "agent_response": (
+            "Here's what the file says: it describes the repository as a "
+            "long-term substrate for collecting learnings about Victoria, "
+            "agents, and Cursor. The core goal is knowledge building — "
+            "keeping useful learnings from conversations and documents so "
+            "understanding compounds. It uses `activeContext.md` and "
+            "`CURSOR_KNOWLEDGE.md` for session continuity."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "backtick_file_references",
+        "tool_output": (
+            "The project uses activeContext.md for session handoff and "
+            "CURSOR_KNOWLEDGE.md for accumulated knowledge. The journal "
+            "directory contains daily entries."
+        ),
+        "agent_response": (
+            "The project relies on `activeContext.md` for handoff and "
+            "`CURSOR_KNOWLEDGE.md` for knowledge. There's also a journal "
+            "directory for daily entries."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
 ]
 
 
@@ -476,4 +514,228 @@ class TestFalsePositiveRate:
         assert fp_rate < 0.02, (
             f"False positive rate {fp_rate:.1%} exceeds 2% threshold "
             f"({false_positives}/{total} cases failed)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Self-report git output false-positive corpus
+# ---------------------------------------------------------------------------
+
+from toolwitness.verification.bridge import _classify_self_reported
+
+SELF_REPORT_GIT_CORPUS = [
+    {
+        "name": "git_diff_summary",
+        "tool_output": (
+            "diff --git a/BACKLOG.md b/BACKLOG.md\n"
+            "index 6931566..80dfae5 100644\n"
+            "--- a/BACKLOG.md\n"
+            "+++ b/BACKLOG.md\n"
+            "@@ -21,10 +21,13 @@\n"
+            "-## Quick reference — known detection limitations (bugs)\n"
+            "+## Quick reference — resolved detection bugs\n"
+            " \n"
+            "-| BUG-01 | Unit conversion | EP-05 | ST-30 |\n"
+            "-| BUG-02 | List summarization | EP-05 | ST-30 |\n"
+            "+| BUG-01 | Unit conversion | v0.1.1 | _conversion_close() |\n"
+            "+| BUG-02 | List summarization | v0.1.1 | list-item grouping |\n"
+            "diff --git a/config.yaml b/config.yaml\n"
+            "index 1d748d8..1246746 100644\n"
+            "--- a/config.yaml\n"
+            "+++ b/config.yaml\n"
+            "@@ -320,7 +320,7 @@\n"
+            "-  status: open\n"
+            "+  status: done\n"
+        ),
+        "agent_response": (
+            "The diff shows changes in 2 files: BACKLOG.md (bug table "
+            "updated to show resolved status) and config.yaml (status "
+            "changed from open to done)."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "git_commit_output",
+        "tool_output": (
+            "[main 002829b] docs: fix stale bug table and backlog status\n"
+            " 3 files changed, 13 insertions(+), 8 deletions(-)"
+        ),
+        "agent_response": (
+            "Commit 002829b landed on main — 'docs: fix stale bug table "
+            "and backlog status'. 3 files changed, 13 insertions, "
+            "8 deletions."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "git_status_ahead",
+        "tool_output": (
+            "On branch main\n"
+            "Your branch is ahead of 'origin/main' by 1 commit.\n"
+            "  (use \"git push\" to publish your local commits)\n"
+            "\n"
+            "Changes not staged for commit:\n"
+            "\tmodified:   src/app.py\n"
+            "\tmodified:   docs/README.md\n"
+            "\tmodified:   tests/test_core.py\n"
+            "\n"
+            "Untracked files:\n"
+            "\tdocs/coverage.md\n"
+            "\n"
+            "no changes added to commit\n"
+        ),
+        "agent_response": (
+            "Branch main is 1 commit ahead of origin/main. "
+            "3 modified files: src/app.py, docs/README.md, "
+            "tests/test_core.py. 1 untracked file: docs/coverage.md."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+    {
+        "name": "git_log_oneline",
+        "tool_output": (
+            "002829b docs: fix stale bug table and backlog status\n"
+            "c95814f v0.2.0: verification engine hardening\n"
+            "6e1640d docs: add context rot as root cause\n"
+            "bbd13bc docs: restructure homepage\n"
+            "d31e5c8 docs: product narrative update\n"
+        ),
+        "agent_response": (
+            "Recent commits: 002829b docs fix, c95814f v0.2.0 "
+            "hardening, 6e1640d context rot docs, bbd13bc homepage "
+            "restructure, d31e5c8 narrative update."
+        ),
+        "acceptable": {Classification.VERIFIED, Classification.EMBELLISHED},
+    },
+]
+
+
+class TestSelfReportGitCorpus:
+    """Self-reported git outputs must not produce false positives.
+
+    Tests exercise _classify_self_reported directly — the code path
+    for native tool outputs passed via the tool_outputs parameter.
+    """
+
+    @pytest.mark.parametrize(
+        "case",
+        SELF_REPORT_GIT_CORPUS,
+        ids=[c["name"] for c in SELF_REPORT_GIT_CORPUS],
+    )
+    def test_no_false_positive(self, case):
+        result = _classify_self_reported(
+            tool_name="Shell",
+            tool_output=case["tool_output"],
+            response_text=case["agent_response"],
+        )
+
+        assert result.classification in case["acceptable"], (
+            f"False positive! '{case['name']}' classified as "
+            f"{result.classification.value} (confidence={result.confidence:.2f}), "
+            f"expected one of {[c.value for c in case['acceptable']]}\n"
+            f"Evidence: {result.evidence}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Proxy-path false-positive corpus (text grounding + magnitude matching)
+# ---------------------------------------------------------------------------
+
+_FILE_CONTENT_600_CHARS = (
+    "# Primary objectives\n\n"
+    "This repository is the long-term substrate where we collect what we "
+    "learn about you (patterns, preferences, growth), agents (how "
+    "collaboration works, what helps or breaks it), and Cursor (tooling, "
+    "context engineering). The core goal right now is knowledge building: "
+    "identifying and keeping useful learnings from conversations, documents, "
+    "and external artifacts so understanding compounds instead of "
+    "evaporating.\n\n"
+    "## How learnings get pulled in\n\n"
+    "Capture is hybrid, not automatic. Session continuity via "
+    "activeContext.md, proactive journaling, commands like /journal and "
+    "/session-end, and knowledge entries in CURSOR_KNOWLEDGE.md.\n\n"
+    "## Protecting the substrate\n\n"
+    "If a requested action would destroy the core learning store, the agent "
+    "must stop and name the conflict.\n"
+)
+
+
+class TestProxyPathFalsePositives:
+    """Proxy-recorded outputs that previously triggered false positives."""
+
+    def test_file_read_summary(self):
+        """Long file content paraphrased by agent must not be FABRICATED.
+
+        Exercises the text grounding path (output >= 500 chars). The agent
+        summarises the file in its own words including a long passage in
+        quotes — the quote cap must prevent that from being treated as a
+        verbatim claim.
+        """
+        assert len(_FILE_CONTENT_600_CHARS) >= 500
+
+        result = _classify_self_reported(
+            tool_name="read_file",
+            tool_output=_FILE_CONTENT_600_CHARS,
+            response_text=(
+                "Here's what PRIMARY_OBJECTIVES.md says: 'The repository is "
+                "the long-term substrate for collecting learnings about you, "
+                "agents, and Cursor. The core goal right now is knowledge "
+                "building — identifying and keeping useful learnings from "
+                "conversations, documents, and external artifacts so "
+                "understanding compounds instead of evaporating.' It also "
+                "covers how learnings enter via activeContext.md and "
+                "journaling, and protecting the substrate from destructive "
+                "actions."
+            ),
+        )
+
+        assert result.classification in {
+            Classification.VERIFIED, Classification.EMBELLISHED,
+        }, (
+            f"False positive! file_read_summary classified as "
+            f"{result.classification.value} (confidence={result.confidence:.2f})\n"
+            f"Evidence: {result.evidence}"
+        )
+
+    def test_file_info_byte_to_kb(self):
+        """File size in bytes reported as KB by agent must match.
+
+        Exercises _magnitude_close: 29931 bytes ÷ 1024 ≈ 29.2 KB.
+        """
+        result = classify(
+            tool_name="get_file_info",
+            agent_response=(
+                "The file is about 29 KB, last modified Mar 29 2026, "
+                "permissions 644."
+            ),
+            execution=ToolExecution(
+                tool_name="get_file_info",
+                args={"path": "/tmp/example.md"},
+                output={
+                    "size": 29931,
+                    "modified": "Mar 29 2026",
+                    "isDirectory": "false",
+                    "isFile": "true",
+                    "permissions": 644,
+                },
+                receipt=ExecutionReceipt(
+                    receipt_id="test-fileinfo",
+                    tool_name="get_file_info",
+                    args_hash="",
+                    output_hash="",
+                    timestamp=0.0,
+                    duration_ms=0.0,
+                    signature="test",
+                ),
+                error=None,
+            ),
+            receipt_valid=True,
+        )
+
+        assert result.classification in {
+            Classification.VERIFIED, Classification.EMBELLISHED,
+        }, (
+            f"False positive! file_info_byte_to_kb classified as "
+            f"{result.classification.value} (confidence={result.confidence:.2f})\n"
+            f"Evidence: {result.evidence}"
         )
