@@ -31,6 +31,11 @@ class ToolWitnessConfig:
     slack_webhook_url: str | None = None
     alerting_config: dict[str, Any] | None = None
 
+    semantic_enabled: bool = False
+    semantic_provider: str = "openai"
+    semantic_model: str = "gpt-4o-mini"
+    semantic_api_key: str | None = None
+
     @classmethod
     def load(cls, yaml_path: str | Path | None = None) -> ToolWitnessConfig:
         """Load config with precedence: env > YAML > defaults."""
@@ -82,6 +87,16 @@ def _apply_yaml(config: ToolWitnessConfig, data: dict[str, Any]) -> ToolWitnessC
     if "embellishment_alert" in verification:
         config.embellishment_alert = bool(verification["embellishment_alert"])
 
+    semantic = verification.get("semantic", {})
+    if "enabled" in semantic:
+        config.semantic_enabled = bool(semantic["enabled"])
+    if "provider" in semantic:
+        config.semantic_provider = str(semantic["provider"])
+    if "model" in semantic:
+        config.semantic_model = str(semantic["model"])
+    if "api_key" in semantic:
+        config.semantic_api_key = str(semantic["api_key"])
+
     alerting = data.get("alerting", {})
     if "webhook_url" in alerting:
         config.webhook_url = alerting["webhook_url"]
@@ -102,7 +117,19 @@ def _apply_env(config: ToolWitnessConfig) -> ToolWitnessConfig:
         "TOOLWITNESS_EMBELLISHMENT_ALERT": "embellishment_alert",
         "TOOLWITNESS_WEBHOOK_URL": "webhook_url",
         "TOOLWITNESS_SLACK_WEBHOOK_URL": "slack_webhook_url",
+        "TOOLWITNESS_SEMANTIC_PROVIDER": "semantic_provider",
+        "TOOLWITNESS_SEMANTIC_MODEL": "semantic_model",
+        "TOOLWITNESS_SEMANTIC_API_KEY": "semantic_api_key",
     }
+
+    api_key = os.environ.get("TOOLWITNESS_SEMANTIC_API_KEY")
+    if api_key and not os.environ.get("TOOLWITNESS_SEMANTIC_ENABLED"):
+        config.semantic_enabled = True
+        config.semantic_api_key = api_key
+
+    semantic_enabled_env = os.environ.get("TOOLWITNESS_SEMANTIC_ENABLED")
+    if semantic_enabled_env is not None:
+        config.semantic_enabled = semantic_enabled_env.lower() in ("true", "1", "yes")
 
     for env_key, attr in env_map.items():
         value = os.environ.get(env_key)

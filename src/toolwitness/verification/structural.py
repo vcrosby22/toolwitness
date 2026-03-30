@@ -67,13 +67,25 @@ def _flatten_dict(data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
 
 
 def _numeric_close(a: Any, b: Any, tolerance: float = 0.05) -> bool:
-    """Check if two values are numerically close (within tolerance ratio)."""
+    """Check if two values are numerically close.
+
+    Uses adaptive tolerance based on magnitude:
+      - |value| >= 100: relative tolerance (default 5%) — rounding expected
+      - 10 <= |value| < 100: absolute +/- 1 — small ints like temperatures
+      - |value| < 10: absolute +/- 0.1 — counts, die rolls, small measures
+    """
     try:
         fa, fb = float(a), float(b)
     except (ValueError, TypeError):
         return False
     if fb == 0:
         return fa == 0
+
+    magnitude = max(abs(fa), abs(fb))
+    if magnitude < 10:
+        return abs(fa - fb) <= 0.1
+    if magnitude < 100:
+        return abs(fa - fb) <= 1.0
     return abs(fa - fb) / max(abs(fb), 1e-9) <= tolerance
 
 
@@ -257,6 +269,7 @@ def _count_line_prefixes(text: str) -> dict[str, int]:
 
 
 _LONG_TEXT_THRESHOLD = 500
+_MAX_QUOTE_VERIFY_LEN = 100
 
 _LIST_ITEM_RE = re.compile(r"(.+\[\d+\])(?:\..+)?$")
 
@@ -395,15 +408,22 @@ def text_grounding_match(
     source_lower = source_text.lower()
 
     # --- 1. Quoted phrases: strongest signal of a specific claim ---
+    # Strip English contractions before matching so apostrophes in words
+    # like "Here's", "don't", "we're" aren't treated as quote delimiters.
+    _contraction_stripped = re.sub(
+        r"(?<=[a-zA-Z])'(?:s|t|re|ve|ll|d|m)\b", "", agent_response,
+    )
     quoted = re.findall(
         r"""['"\u2018\u2019\u201c\u201d]"""
         r"""([^'"\u2018\u2019\u201c\u201d]{3,}?)"""
         r"""['"\u2018\u2019\u201c\u201d]""",
-        agent_response,
+        _contraction_stripped,
     )
     for phrase in quoted:
         phrase_clean = phrase.strip().lower()
         if len(phrase_clean) < 3:
+            continue
+        if len(phrase_clean) > _MAX_QUOTE_VERIFY_LEN:
             continue
         if phrase_clean in source_lower:
             result.matched_values.append(
@@ -412,6 +432,21 @@ def text_grounding_match(
         else:
             result.mismatched_values.append(
                 {"key": "quoted", "expected": phrase.strip(), "found_in_response": False}
+            )
+
+    # --- 1b. Backtick-quoted code terms (file names, identifiers) ---
+    backtick_terms = re.findall(r"`([^`]{2,}?)`", agent_response)
+    for term in backtick_terms:
+        term_clean = term.strip().lower()
+        if len(term_clean) < 2:
+            continue
+        if term_clean in source_lower:
+            result.matched_values.append(
+                {"key": "backtick", "expected": term.strip(), "found": True}
+            )
+        else:
+            result.mismatched_values.append(
+                {"key": "backtick", "expected": term.strip(), "found_in_response": False}
             )
 
     # --- 2. Dates: YYYY-MM-DD, "Month DD YYYY", or "Month YYYY" ---
@@ -502,7 +537,14 @@ def text_grounding_match(
     ungrounded = content_words - source_words
     if content_words:
         grounding_ratio = len(grounded) / len(content_words)
-        if grounding_ratio < 0.5 and len(ungrounded) >= 3:
+        if grounding_ratio >= 0.7 and len(result.mismatched_values) == 0:
+            result.matched_values.append({
+                "key": "content_grounding",
+                "expected": f"{len(grounded)}/{len(content_words)} words grounded",
+                "found": True,
+                "grounding_ratio": round(grounding_ratio, 2),
+            })
+        elif grounding_ratio < 0.5 and len(ungrounded) >= 3:
             for word in sorted(ungrounded)[:5]:
                 result.missing_values.append(word)
 

@@ -470,6 +470,17 @@ const SOURCE_BADGES = {
     test:          {bg:'#3b1f1f', color:'#fca5a5', label:'Test'},
 };
 
+const VERIFY_SOURCE_BADGES = {
+    proxy:       {bg:'#052e16', color:'#4ade80', icon:'\u2705', label:'Proxy Verified'},
+    self_report: {bg:'#1e3a5f', color:'#60a5fa', icon:'\ud83d\udcdd', label:'Self-Reported'},
+};
+function verifySourceBadge(source) {
+    const b = VERIFY_SOURCE_BADGES[source] || VERIFY_SOURCE_BADGES.proxy;
+    return '<span title="'+b.label+'" style="background:'+b.bg+';color:'+b.color+
+        ';padding:0.1rem 0.4rem;border-radius:3px;font-size:0.65rem;'+
+        'font-weight:600">'+b.icon+' '+b.label+'</span>';
+}
+
 function sourceBadge(s) {
     let src = s.source || 'sdk';
     if (src === 'sdk') {
@@ -542,10 +553,22 @@ function renderRecent(verifs) {
         document.getElementById('recent').innerHTML = '<p class="empty">No data yet.</p>';
         return;
     }
-    let html = '<table><thead><tr><th>Tool</th><th>Classification</th>' +
-        '<th>Confidence</th><th>Session</th><th>Actions</th></tr></thead><tbody>';
+    const hasSelfReport = verifs.some(v => v.source === 'self_report');
+    const hasProxy = verifs.some(v => !v.source || v.source === 'proxy');
+    let html = '';
+    if (!hasSelfReport && hasProxy) {
+        html += '<div style="background:#1c1917;border:1px solid #854d0e;border-radius:8px;'+
+            'padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.8rem;color:#fbbf24">'+
+            '<strong>Native tools not verified.</strong> Only MCP proxy tools are being '+
+            'checked. Cursor native tools (Read, Shell, Grep) are not included in '+
+            'verification. To enable full coverage, install the updated rule: '+
+            '<code>toolwitness init --cursor-rule</code></div>';
+    }
+    html += '<table><thead><tr><th>Tool</th><th>Classification</th>' +
+        '<th>Source</th><th>Confidence</th><th>Session</th><th>Actions</th></tr></thead><tbody>';
     verifs.slice(0, 50).forEach(v => {
         const color = COLORS[v.classification] || '#6b7280';
+        const source = v.source || 'proxy';
         const isFail = ['fabricated','skipped','embellished'].includes(v.classification);
         let actions = '';
         if (isFail) {
@@ -560,6 +583,7 @@ function renderRecent(verifs) {
         html += '<tr><td><code>' + (v.tool_name || '') + '</code></td>' +
             '<td><span class="badge" style="background:' + color + '">' +
             v.classification.toUpperCase() + '</span></td>' +
+            '<td>' + verifySourceBadge(source) + '</td>' +
             '<td>' + (v.confidence || 0).toFixed(2) + '</td>' +
             '<td>' + (v.session_id || '').substring(0, 8) + '</td>' +
             '<td>' + actions + '</td></tr>';

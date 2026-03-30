@@ -235,6 +235,84 @@ class TestVerifyAgentResponse:
         assert result.executions_checked == 0
 
 
+class TestMultiToolSegmentation:
+    """Integration tests: segmentation through the full verify_agent_response path."""
+
+    def test_proxy_multi_tool_no_cross_contamination(self, seeded_storage):
+        """Two proxy tools with different numbers must not cross-contaminate."""
+        result = verify_agent_response(
+            seeded_storage,
+            "- get_weather: Miami is 72\u00b0F and sunny\n"
+            "- get_file_info: test.md is 4096 bytes, modified 2026-03-27",
+            since_minutes=60,
+            persist=False,
+        )
+        assert result.executions_checked == 2
+        for v in result.verifications:
+            assert v.classification.value in ("verified", "embellished"), (
+                f"{v.tool_name}: {v.classification.value} -- {v.evidence}"
+            )
+
+    def test_self_report_multi_tool_segmented(self, storage):
+        """Self-reported multi-tool outputs use segmentation."""
+        result = verify_agent_response(
+            storage,
+            "- roll_dice: Rolled 3d6 and got [4, 3, 1] totaling 8\n"
+            "- calculate: 7 * 8 = 56",
+            since_minutes=60,
+            persist=False,
+            tool_outputs=[
+                {"tool": "roll_dice", "output": "Rolled 3d6: [4, 3, 1] (total: 8)"},
+                {"tool": "calculate", "output": '{"expression": "7 * 8", "result": 56}'},
+            ],
+        )
+        assert result.executions_checked == 2
+        for v in result.verifications:
+            assert v.classification.value in ("verified", "embellished"), (
+                f"{v.tool_name}: {v.classification.value} -- {v.evidence}"
+            )
+
+    def test_large_number_isolation(self, storage):
+        """Large numbers from one tool must not bleed into another's verification."""
+        result = verify_agent_response(
+            storage,
+            "- check_balance: Your balance is $1,523,456 USD\n"
+            "- roll_dice: You rolled a d20 and got 17",
+            since_minutes=60,
+            persist=False,
+            tool_outputs=[
+                {"tool": "check_balance", "output": '{"balance": 1523456, "currency": "USD"}'},
+                {"tool": "roll_dice", "output": "Rolled 1d20: [17] (total: 17)"},
+            ],
+        )
+        for v in result.verifications:
+            assert v.classification.value in ("verified", "embellished"), (
+                f"{v.tool_name}: {v.classification.value} -- {v.evidence}"
+            )
+
+    def test_flowing_paragraph_multi_tool(self, storage):
+        """Flowing prose without bullets still segments correctly."""
+        result = verify_agent_response(
+            storage,
+            (
+                "The get_weather tool shows Paris is 62\u00b0F and cloudy. "
+                "I also used roll_dice to roll 2d6 and got [5, 3] totaling 8. "
+                "Finally, calculate confirmed that 7 * 8 = 56."
+            ),
+            since_minutes=60,
+            persist=False,
+            tool_outputs=[
+                {"tool": "get_weather", "output": '{"city": "Paris", "temp_f": 62, "condition": "Cloudy"}'},
+                {"tool": "roll_dice", "output": "Rolled 2d6: [5, 3] (total: 8)"},
+                {"tool": "calculate", "output": '{"expression": "7 * 8", "result": 56}'},
+            ],
+        )
+        for v in result.verifications:
+            assert v.classification.value in ("verified", "embellished"), (
+                f"{v.tool_name}: {v.classification.value} -- {v.evidence}"
+            )
+
+
 class TestBridgeVerificationResult:
     def test_summary_counts(self):
         from toolwitness.core.types import Classification, VerificationResult

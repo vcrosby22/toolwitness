@@ -439,6 +439,34 @@
   milestone: Post-MVP
   tags: [dashboard, hosted, saas]
 
+- id: ST-53
+  type: story
+  parent: EP-06
+  title: Dashboard UX improvements
+  description: >
+    Improve the local dashboard UI for intuitiveness — layout clarity,
+    navigation flow, labeling, and visual hierarchy. Specific changes
+    TBD after a focused UX review pass.
+  priority: P3
+  status: open
+  tags: [dashboard, ux, ui]
+
+- id: ST-54
+  type: story
+  parent: EP-06
+  title: Clear dashboard / dismiss alerts
+  description: >
+    Let users clear stale or false-positive alerts from the dashboard.
+    Two surfaces: (1) UI button on the dashboard (clear all / clear
+    selected), (2) CLI command (e.g. toolwitness clear-alerts) so
+    users can script it or run it headless. Should support clearing
+    all verifications, clearing by session, or clearing by
+    classification (e.g. only fabricated). Needs confirmation prompt
+    to prevent accidental data loss.
+  priority: P1
+  status: open
+  tags: [dashboard, cli, alerts, ux]
+
 # ──────────────────────────────────────────────────
 # STORIES — EP-07 Launch
 # ──────────────────────────────────────────────────

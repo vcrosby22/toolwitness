@@ -46,6 +46,7 @@ nav:
   - Gallery: gallery.md
   - Multi-Agent Support: multi-agent.md
   - Testing Results: testing-results.md
+  - Coverage Model: coverage.md
   - Privacy & Security: privacy.md
   - Why Open Source: why-open-source.md
   - Adapters:

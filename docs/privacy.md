@@ -193,15 +193,33 @@ The `toolwitness proxy` command deserves specific attention because it sits in t
 
 ## Verification Bridge Privacy
 
-The verification bridge (`toolwitness verify` CLI and `tw_verify_response` MCP tool) compares the agent's response text against proxy-recorded tool outputs. Here's the data flow:
+The verification bridge (`toolwitness verify` CLI and `tw_verify_response` MCP tool) compares the agent's response text against tool outputs. Here's the data flow:
 
 1. **Agent response text** — you provide this (via CLI or the agent calls `tw_verify_response`). It is compared against tool outputs **locally** and stored in the local SQLite database. It is never transmitted anywhere.
-2. **Tool outputs** — read from local SQLite (where the proxy recorded them). Never leave the database.
-3. **Verification results** — classification, confidence, and evidence are written to local SQLite. Visible on the local dashboard.
+2. **Proxy-recorded tool outputs** — read from local SQLite (where the proxy recorded them). Never leave the database.
+3. **Self-reported tool outputs** (optional) — when the agent passes `tool_outputs` to `tw_verify_response`, these are compared **in memory** and **immediately discarded**. Raw tool content (file contents, shell output, search results) is **never written** to SQLite. Only the verification verdict (tool name, classification, confidence, evidence keys) is persisted.
+4. **Verification results** — classification, confidence, and evidence are written to local SQLite. Visible on the local dashboard.
 
 If you have alerting configured, the bridge sends alerts through the same channels with the same privacy guarantees described above — classification metadata only, never raw data.
 
 The bridge's text grounding engine (used for long outputs like file contents) extracts claims from the agent's text and checks them against the source. This happens entirely in local memory. No external API, no cloud service, no network call.
+
+---
+
+## Self-Report Privacy
+
+When using full-coverage verification (the default `--cursor-rule`), the agent includes raw tool outputs in the `tw_verify_response` call. This data flows through the local MCP connection to the ToolWitness server process on your machine.
+
+| What happens | Detail |
+|---|---|
+| Agent passes tool outputs to `tw_verify_response` | Via local MCP connection (localhost only) |
+| ToolWitness compares response vs outputs | In memory — no disk write of raw content |
+| Raw tool outputs are discarded | After classification completes |
+| Only verdicts are persisted | Tool name, classification, confidence, evidence keys |
+| No file contents stored | Not in SQLite, not in logs, not anywhere |
+| No network calls | ToolWitness has no HTTP client, no telemetry |
+
+Self-reported data receives the same security treatment as any other local tool call — it stays on your machine and is processed transiently.
 
 ---
 
@@ -215,6 +233,7 @@ The bridge's text grounding engine (used for long outputs like file contents) ex
 | Failure mode | Fail-open — never blocks your agent |
 | Scope | Tool I/O only — no code, no secrets, no prompts (proxy scope is even narrower) |
 | Verification bridge | Compares locally, stores locally — response text never transmitted |
+| Self-reported outputs | Compared in memory, discarded immediately — raw content never persisted |
 | Alerts (summary) | Classification + tool name + confidence only — no raw data |
 | Alerts (full) | Adds mismatched values — still no source code, prompts, or file contents |
 | Digest reports | Aggregate counts only — no individual tool outputs |
