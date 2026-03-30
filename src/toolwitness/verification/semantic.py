@@ -9,7 +9,9 @@ Planned extras:
   - toolwitness[openai]   — OpenAI embeddings API
 
 Tracked in backlog: ST-30 (Semantic verification via embeddings).
-Related bugs: BUG-01 (unit conversion), BUG-02 (list summarization).
+Note: BUG-01 (unit conversion) and BUG-02 (list summarization) were
+resolved in v0.1.1 via structural heuristics. Semantic verification
+is an optional stronger layer, not a required fix for those cases.
 """
 
 from __future__ import annotations

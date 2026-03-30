@@ -21,10 +21,13 @@ Priority scale: P0 (critical) → P3 (low).
 
 **Want to contribute?** See an item you'd like to work on? Open an issue referencing the item ID and we'll coordinate. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## Quick reference — known detection limitations (bugs)
+## Quick reference — resolved detection bugs
 
-| ID | Title | Parent | Fix via |
-|----|-------|--------|---------|
-| BUG-01 | Unit conversion classified as FABRICATED | EP-05 | ST-30 (semantic verification) |
-| BUG-02 | List summarization classified as FABRICATED | EP-05 | ST-30, ST-34 |
-| BUG-03 | Entity substitution not detected (wrong city) | EP-05 | ST-31 (NER detection) |
+All detection bugs have been fixed through structural matching improvements (v0.1.1–v0.1.3). Semantic verification (ST-30) and NER detection (ST-31) remain open as optional stronger layers, not as required fixes.
+
+| ID | Title | Fixed in | Resolution |
+|----|-------|----------|------------|
+| BUG-01 | Unit conversion classified as FABRICATED | v0.1.1 | `_conversion_close()` with 10 conversion pairs and 1.2% tolerance |
+| BUG-02 | List summarization classified as FABRICATED | v0.1.1 | List-item-aware grouping in `structural_match` |
+| BUG-03 | Entity substitution not detected (wrong city) | v0.1.1 | `_detect_substitution()` with token-swap and proper-noun heuristics |
+| BUG-04 | Comma-formatted numbers split into digits | v0.1.1 | Regex fix in `_extract_numbers()` |

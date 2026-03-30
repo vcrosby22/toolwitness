@@ -320,7 +320,7 @@
     When tool B is called, verify its inputs match prior tool A's
     outputs. Structured-to-structured comparison.
   priority: P1
-  status: open
+  status: done
   milestone: Week 3
   tags: [multi-turn, chain, verification]
 
