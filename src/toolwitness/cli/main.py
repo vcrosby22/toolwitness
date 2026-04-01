@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -1632,6 +1634,18 @@ def doctor(ctx: click.Context) -> None:
     tw_path = shutil.which("toolwitness")
     if tw_path:
         _pass(f"toolwitness binary: {tw_path}")
+        # 2a. Same venv / Python layout as this interpreter (catches wrong PATH order)
+        bin_dir = Path(sys.executable).resolve().parent
+        try:
+            if Path(tw_path).resolve().parent != bin_dir:
+                _warn(
+                    "`toolwitness` on PATH is not next to this Python executable "
+                    f"({bin_dir}). Activate the intended venv or put that venv's "
+                    "`bin` first on PATH — Cursor's mcp.json should use the absolute "
+                    "path from `which toolwitness` after activation."
+                )
+        except OSError:
+            pass
     else:
         _fail(
             "toolwitness binary not found on PATH",
@@ -1762,20 +1776,47 @@ def doctor(ctx: click.Context) -> None:
         )
 
     # 8. Dashboard reachability
+    import urllib.request
+
+    dash_port = 8321
+    port_in_use = False
     try:
-        import urllib.request
-        req = urllib.request.Request("http://127.0.0.1:8321/api/health", method="GET")
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", dash_port))
+        except OSError:
+            port_in_use = True
+        finally:
+            probe.close()
+    except OSError:
+        pass
+
+    health_ok = False
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{dash_port}/api/health", method="GET"
+        )
         with urllib.request.urlopen(req, timeout=2) as resp:
-            if resp.status == 200:
-                _pass("Dashboard reachable at http://localhost:8321")
-            else:
-                _warn("Dashboard returned non-200 status")
+            health_ok = resp.status == 200
     except Exception:
+        pass
+
+    if health_ok:
+        _pass(f"Dashboard reachable at http://localhost:{dash_port}")
+    elif port_in_use:
         _warn(
-            "Dashboard not reachable at http://localhost:8321 — "
-            "it starts automatically with `toolwitness serve`. "
-            "Check that the toolwitness MCP server is running in "
-            "Cursor Settings → MCP."
+            f"Port {dash_port} is in use but the ToolWitness dashboard health check "
+            "failed — another process may own that port, or the dashboard failed to "
+            "start. Try: lsof -i :8321"
+        )
+    else:
+        _warn(
+            f"Nothing listening on port {dash_port} — dashboard not running. "
+            "With stdio MCP, it only exists while Cursor's `toolwitness serve` "
+            "process is connected. For a URL that stays up: "
+            "`toolwitness serve --transport sse` and point Cursor at the SSE URL "
+            "(see docs), or use launchd / `toolwitness daemon start`."
         )
 
     # 9. Auto-verify Cursor rule
