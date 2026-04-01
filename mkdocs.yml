@@ -41,6 +41,9 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Initialization:
+      - End user (first run): initialization-end-user.md
+      - Builder (developing ToolWitness): initialization-builder.md
   - How It Works: how-it-works.md
   - Remediation: remediation.md
   - Gallery: gallery.md
@@ -56,7 +59,9 @@ nav:
     - MCP: adapters/mcp.md
     - CrewAI: adapters/crewai.md
   - Alerting Model: alerting-model.md
-  - CLI Reference: cli.md
+  - Commands:
+      - Quick reference: command-quick-reference.md
+      - CLI Reference (full): cli.md
   - Contributing: contributing.md
 
 extra:

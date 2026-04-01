@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+- Docs: **Command quick reference** page (`docs/command-quick-reference.md`) in the site nav under **Commands**, linked from the README — short “what to run when” guide pointing to the full CLI Reference.
 
 ## [0.2.0] - 2026-03-29
 

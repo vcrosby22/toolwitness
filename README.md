@@ -8,7 +8,7 @@ tools actually returned.
 
 > *Stop trusting your agent — get a witness.*
 
-**[Documentation](https://vcrosby22.github.io/toolwitness/)** | **[Getting Started](https://vcrosby22.github.io/toolwitness/getting-started/)** | **[How It Works](https://vcrosby22.github.io/toolwitness/how-it-works/)**
+**[Documentation](https://vcrosby22.github.io/toolwitness/)** | **[Getting Started](https://vcrosby22.github.io/toolwitness/getting-started/)** | **[Command quick reference](https://vcrosby22.github.io/toolwitness/command-quick-reference/)** | **[How It Works](https://vcrosby22.github.io/toolwitness/how-it-works/)**
 
 ## What ToolWitness detects
 
@@ -194,6 +194,11 @@ toolwitness init  # Creates toolwitness.yaml with commented defaults
 ```
 
 Config precedence: environment variables (`TOOLWITNESS_*`) > YAML (`toolwitness.yaml`) > code defaults.
+
+## First-time setup (Cursor / MCP)
+
+- **[Initialization — end user](https://vcrosby22.github.io/toolwitness/initialization-end-user/)** — install, MCP proxy + `serve`, Cursor rule, smoke test  
+- **[Initialization — builder](https://vcrosby22.github.io/toolwitness/initialization-builder/)** — editable install, where `toolwitness init` templates live, how to test before release  
 
 ## CLI
 
