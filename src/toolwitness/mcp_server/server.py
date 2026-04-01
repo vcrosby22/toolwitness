@@ -531,11 +531,17 @@ def run_server(
     if dashboard_port:
         _start_dashboard_thread(db_path, port=dashboard_port)
 
+    # FastMCP >= 1.0: bind address for HTTP transports is set on ``mcp.settings``,
+    # not passed to ``run()`` (which only accepts ``transport`` and ``mount_path``).
+    if transport in ("sse", "streamable-http"):
+        mcp.settings.host = host
+        mcp.settings.port = port
+
     if transport == "stdio":
         mcp.run(transport="stdio")
     elif transport == "sse":
-        mcp.run(transport="sse", host=host, port=port)
+        mcp.run(transport="sse")
     elif transport == "streamable-http":
-        mcp.run(transport="streamable-http", host=host, port=port)
+        mcp.run(transport="streamable-http")
     else:
         raise ValueError(f"Unknown transport: {transport!r} (use stdio, sse, or streamable-http)")
