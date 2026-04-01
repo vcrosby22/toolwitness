@@ -7,14 +7,22 @@ Thank you for your interest in contributing! ToolWitness is an open-source proje
 ```bash
 git clone https://github.com/vcrosby22/toolwitness.git
 cd toolwitness
-pip install -e ".[dev]"
+pip install -e ".[dev,mcp]"
 ```
+
+The **`mcp`** extra is required for `tests/test_mcp_server.py` (FastMCP verification server). Without it, those tests fail with `ModuleNotFoundError: No module named 'mcp'`.
 
 ## Running tests
 
 ```bash
 pytest tests/ -v             # Full test suite
 pytest tests/ -v --tb=short  # Compact output
+```
+
+To run only the **verification scenario harness** (multi-tool scenarios, structural limits, semantic pairing):
+
+```bash
+pytest tests/test_verification_scenarios.py tests/test_semantic.py tests/test_false_positives.py -v
 ```
 
 ## Linting
