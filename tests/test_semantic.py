@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,8 +24,6 @@ from toolwitness.verification.semantic import (
     SemanticVerifier,
     create_verifier,
 )
-from toolwitness.verification.structural import MatchResult as StructuralMatchResult
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper: build a mock verifier from a canned judge response
@@ -356,15 +354,19 @@ class TestErrorHandling:
 
     def test_missing_openai_package(self):
         verifier = LLMJudgeVerifier(provider="openai", api_key="test")
-        with patch.dict("sys.modules", {"openai": None}):
-            with pytest.raises(ImportError, match="openai package required"):
-                verifier._get_client()
+        with (
+            patch.dict("sys.modules", {"openai": None}),
+            pytest.raises(ImportError, match="openai package required"),
+        ):
+            verifier._get_client()
 
     def test_missing_anthropic_package(self):
         verifier = LLMJudgeVerifier(provider="anthropic", api_key="test")
-        with patch.dict("sys.modules", {"anthropic": None}):
-            with pytest.raises(ImportError, match="anthropic package required"):
-                verifier._get_client()
+        with (
+            patch.dict("sys.modules", {"anthropic": None}),
+            pytest.raises(ImportError, match="anthropic package required"),
+        ):
+            verifier._get_client()
 
     def test_unknown_provider(self):
         verifier = LLMJudgeVerifier(provider="local_llm", api_key="test")

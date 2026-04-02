@@ -6,7 +6,7 @@ import time
 import pytest
 
 from toolwitness.core.receipt import generate_receipt, generate_session_key
-from toolwitness.core.types import ExecutionReceipt, ToolExecution
+from toolwitness.core.types import ToolExecution
 from toolwitness.storage.sqlite import SQLiteStorage
 from toolwitness.verification.bridge import (
     BridgeVerificationResult,

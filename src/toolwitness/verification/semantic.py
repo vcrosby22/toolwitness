@@ -97,7 +97,7 @@ class LLMJudgeVerifier(SemanticVerifier):
                 raise ImportError(
                     "openai package required for LLM judge verification. "
                     "Install with: pip install openai"
-                )
+                ) from None
         elif self.provider == "anthropic":
             try:
                 import anthropic
@@ -106,7 +106,7 @@ class LLMJudgeVerifier(SemanticVerifier):
                 raise ImportError(
                     "anthropic package required for LLM judge verification. "
                     "Install with: pip install anthropic"
-                )
+                ) from None
         else:
             raise ValueError(f"Unknown semantic provider: {self.provider}")
 

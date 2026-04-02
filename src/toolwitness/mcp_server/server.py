@@ -34,7 +34,6 @@ Or with SSE (survives Cursor restarts)::
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
@@ -48,7 +47,6 @@ from toolwitness.config import ToolWitnessConfig
 from toolwitness.storage.sqlite import SQLiteStorage
 from toolwitness.verification.bridge import (
     BridgeVerificationResult,
-    hydrate_execution,
     verify_agent_response,
 )
 

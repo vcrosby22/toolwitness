@@ -461,11 +461,8 @@ def text_grounding_match(
     source_months_normalized = _normalize_months(source_lower).replace(",", "")
     for date_str in date_patterns:
         date_lower = date_str.lower()
-        if date_lower in source_lower:
-            result.matched_values.append(
-                {"key": "date", "expected": date_str, "found": True}
-            )
-        elif _normalize_months(date_lower).replace(",", "") in source_months_normalized:
+        date_norm = _normalize_months(date_lower).replace(",", "")
+        if date_lower in source_lower or date_norm in source_months_normalized:
             result.matched_values.append(
                 {"key": "date", "expected": date_str, "found": True}
             )
@@ -628,13 +625,9 @@ def structural_match(
     for key, value in items_to_check:
         if isinstance(value, bool):
             bool_str = str(value).lower()
-            if bool_str in response_lower:
-                result.matched_values.append({"key": key, "expected": value, "found": True})
-            elif value is True and re.search(
+            if bool_str in response_lower or value is True and re.search(
                 r"\byes\b|\bavailable\b|\benabled\b|\bactive\b", response_lower,
-            ):
-                result.matched_values.append({"key": key, "expected": value, "found": True})
-            elif value is False and re.search(
+            ) or value is False and re.search(
                 r"\bnot\b|\bunavailable\b|\bdisabled\b|\binactive\b", response_lower,
             ):
                 result.matched_values.append({"key": key, "expected": value, "found": True})
@@ -689,9 +682,7 @@ def structural_match(
                     result.missing_values.append(key)
 
         elif isinstance(value, str):
-            if value.lower() in response_lower:
-                result.matched_values.append({"key": key, "expected": value, "found": True})
-            elif (
+            if value.lower() in response_lower or (
                 _normalize_months(value).lower().replace(",", "")
                 in _normalize_months(response_lower).replace(",", "")
             ):

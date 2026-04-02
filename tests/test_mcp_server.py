@@ -1,7 +1,5 @@
 """Tests for the ToolWitness MCP verification server."""
 
-import json
-import time
 
 import pytest
 

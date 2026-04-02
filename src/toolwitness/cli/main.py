@@ -507,8 +507,6 @@ def digest(ctx: click.Context, period: str, fmt: str, send: bool) -> None:
 def _send_digest(config: ToolWitnessConfig, report: Any) -> None:
     """Deliver digest through configured alerting channels."""
     from toolwitness.alerting.channels import (
-        SlackChannel,
-        WebhookChannel,
         _post_json,
     )
 
@@ -697,7 +695,7 @@ def _show_claude_desktop_instructions(*, minimal: bool = False) -> None:
     prompt = _SYSTEM_PROMPT_MINIMAL if minimal else _SYSTEM_PROMPT_FULL
     level = "MCP-only" if minimal else "full coverage"
     click.echo(f"# Claude Desktop custom instructions ({level})")
-    click.echo(f"# Add this to your project's custom instructions in Claude Desktop:\n")
+    click.echo("# Add this to your project's custom instructions in Claude Desktop:\n")
     click.echo(prompt)
 
 
@@ -706,7 +704,7 @@ def _show_system_prompt_instructions(*, minimal: bool = False) -> None:
     prompt = _SYSTEM_PROMPT_MINIMAL if minimal else _SYSTEM_PROMPT_FULL
     level = "MCP-only" if minimal else "full coverage"
     click.echo(f"# Generic LLM system prompt ({level})")
-    click.echo(f"# Add this to your agent's system prompt:\n")
+    click.echo("# Add this to your agent's system prompt:\n")
     click.echo(prompt)
 
 
@@ -1094,7 +1092,7 @@ def serve(
             "Or: pip install mcp",
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     if transport != "stdio":
         click.echo(
@@ -1213,6 +1211,8 @@ def daemon_start(
         from toolwitness.mcp_server.server import (
             _start_dashboard_thread,
             configure,
+        )
+        from toolwitness.mcp_server.server import (
             mcp as serve_mcp,
         )
         from toolwitness.proxy.http import run_http_proxy
@@ -1505,11 +1505,10 @@ def purge(
         storage.close()
         return
 
-    if not yes:
-        if not click.confirm("\nDelete these sessions and all related data?"):
-            click.echo("Cancelled.")
-            storage.close()
-            return
+    if not yes and not click.confirm("\nDelete these sessions and all related data?"):
+        click.echo("Cancelled.")
+        storage.close()
+        return
 
     counts = storage.purge_sessions(
         source=purge_source,

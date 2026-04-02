@@ -23,7 +23,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from toolwitness.core.classifier import classify, _score, _build_evidence
+from toolwitness.core.classifier import _build_evidence, _score, classify
 from toolwitness.core.types import (
     Classification,
     ExecutionReceipt,
@@ -483,10 +483,11 @@ def _segment_response(
                 prev_name_end = mentions[i - 1][0] + len(mentions[i - 1][1])
                 start = max(start, prev_name_end)
 
-            if i < len(mentions) - 1:
-                end_pos = mentions[i + 1][0]
-            else:
-                end_pos = len(response_text)
+            end_pos = (
+                mentions[i + 1][0]
+                if i < len(mentions) - 1
+                else len(response_text)
+            )
 
             segments[tool_name] = response_text[start:end_pos]
 

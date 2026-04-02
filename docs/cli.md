@@ -383,11 +383,30 @@ Purge deletes matching sessions and **all related data** (executions, verificati
 
 ### `toolwitness init`
 
-Create a configuration file with commented defaults.
+Create configuration snippets, a default **`toolwitness.yaml`**, or a **Cursor rule** for automatic verification.
 
 ```bash
-toolwitness init                     # Creates toolwitness.yaml
+toolwitness init                     # Creates toolwitness.yaml (prompts if file exists)
+toolwitness init -o my.yaml          # Custom output path for YAML only
 ```
+
+**Cursor rule** (writes `.cursor/rules/toolwitness-verify.mdc` under the **current working directory**):
+
+```bash
+toolwitness init --cursor-rule              # Full coverage (native + MCP tools)
+toolwitness init --cursor-rule --minimal    # MCP-proxied tools only
+```
+
+**Other outputs** (no YAML file; prints to stdout or generates a plist):
+
+| Flag | Output |
+|------|--------|
+| `--claude-desktop` | System prompt snippet for Claude Desktop (`--minimal` supported) |
+| `--system-prompt` | Generic LLM instructions (`--minimal` supported) |
+| `--launchd` | macOS launchd plist; optional `--server-command` |
+| `--cursor-config` | Cursor MCP HTTP transport snippet |
+
+See [Initialization — end user](initialization-end-user.md) and [Initialization — builder](initialization-builder.md) for full walkthroughs.
 
 ---
 

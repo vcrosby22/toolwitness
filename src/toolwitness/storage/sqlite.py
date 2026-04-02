@@ -552,9 +552,14 @@ class SQLiteStorage(StorageBackend):
         *,
         source: str | None = None,
         before: float | None = None,
+        after: float | None = None,
         all_data: bool = False,
     ) -> dict[str, int]:
-        """Delete sessions and all related data. Returns counts of deleted rows."""
+        """Delete sessions and all related data. Returns counts of deleted rows.
+
+        ``before`` deletes sessions started before the timestamp (older than).
+        ``after`` deletes sessions started after the timestamp (newer than).
+        """
         where_parts: list[str] = []
         params: list[Any] = []
 
@@ -567,6 +572,9 @@ class SQLiteStorage(StorageBackend):
             if before:
                 where_parts.append("started_at < ?")
                 params.append(before)
+            if after:
+                where_parts.append("started_at > ?")
+                params.append(after)
 
         if not where_parts:
             return {"sessions": 0, "executions": 0, "verifications": 0, "alerts": 0}

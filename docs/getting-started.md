@@ -340,6 +340,9 @@ toolwitness init --cursor-rule
 
 This creates `.cursor/rules/toolwitness-verify.mdc`, which tells the agent to call `tw_verify_response` after using monitored tools. Without this rule, the proxy records tool calls but the dashboard won't show trust classifications (VERIFIED/FABRICATED).
 
+!!! tip "Full initialization checklist"
+    For install order, MCP layout, `doctor`, and a first functional test in one place, see [Initialization — end user](initialization-end-user.md).
+
 Verification results appear in the conversation and on the dashboard, tagged with a "Bridge" badge.
 
 **Option B: CLI spot-check**

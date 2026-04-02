@@ -80,6 +80,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/false-positive":
             self._api_mark_false_positive(data)
+        elif path == "/api/purge":
+            self._api_purge(data)
         else:
             self._send_404()
 
@@ -179,12 +181,50 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _api_health(self, query: dict[str, list[str]]) -> None:
         storage = self._open_storage()
         ok = storage is not None
-        if storage:
-            storage.close()
-        self._send_json({
+        result: dict[str, Any] = {
             "status": "ok" if ok else "no_database",
             "timestamp": time.time(),
-        })
+            "total_executions": 0,
+            "total_verifications": 0,
+            "total_sessions": 0,
+            "proxy_status": "unknown",
+        }
+        if storage:
+            try:
+                sessions = storage.query_sessions(limit=9999)
+                result["total_executions"] = len(
+                    storage.query_executions(limit=9999),
+                )
+                result["total_verifications"] = len(
+                    storage.query_verifications(limit=9999),
+                )
+                result["total_sessions"] = len(sessions)
+                hb_row = storage._conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='proxy_heartbeats'",
+                ).fetchone()
+                if hb_row:
+                    row = storage._conn.execute(
+                        "SELECT timestamp FROM proxy_heartbeats "
+                        "ORDER BY timestamp DESC LIMIT 1",
+                    ).fetchone()
+                    if row:
+                        age = time.time() - row[0]
+                        if age < 60:
+                            result["proxy_status"] = "alive"
+                        elif age < 300:
+                            result["proxy_status"] = "stale"
+                        else:
+                            result["proxy_status"] = "dead"
+                        result["proxy_heartbeat_age_s"] = round(age, 1)
+                    else:
+                        result["proxy_status"] = "no_heartbeats"
+                else:
+                    result["proxy_status"] = "no_heartbeat_table"
+            except Exception:
+                pass
+            storage.close()
+        self._send_json(result)
 
     def _api_issue_url(self, query: dict[str, list[str]]) -> None:
         vid = query.get("id", [""])[0]
@@ -207,6 +247,39 @@ class DashboardHandler(BaseHTTPRequestHandler):
         )
         url = f"https://github.com/vcrosby22/toolwitness/issues/new?title={title}&body={body}"
         self._send_json({"url": url})
+
+    def _api_purge(self, data: dict[str, Any]) -> None:
+        mode = data.get("mode", "")
+        if mode not in ("last_hour", "today", "older_than_7d", "all"):
+            self._send_json(
+                {"error": "mode must be last_hour, today, older_than_7d, or all"},
+                status=400,
+            )
+            return
+
+        storage = self._open_storage()
+        if not storage:
+            self._send_json({"error": "no database"}, status=404)
+            return
+
+        now = time.time()
+        if mode == "all":
+            counts = storage.purge_sessions(all_data=True)
+        elif mode == "last_hour":
+            counts = storage.purge_sessions(after=now - 3600)
+        elif mode == "today":
+            midnight = data.get("midnight_ts")
+            midnight_ts = (
+                now - (now % 86400) if midnight is None else float(midnight)
+            )
+            counts = storage.purge_sessions(after=midnight_ts)
+        elif mode == "older_than_7d":
+            counts = storage.purge_sessions(before=now - 604800)
+        else:
+            counts = {"sessions": 0, "executions": 0, "verifications": 0}
+
+        storage.close()
+        self._send_json({"status": "ok", "deleted": counts})
 
     def _api_mark_false_positive(self, data: dict[str, Any]) -> None:
         vid = data.get("verification_id")
@@ -334,9 +407,58 @@ a.report-link:hover { text-decoration: underline; }
   color: #e2e8f0; padding: 0.3rem 0.75rem; border-radius: 6px;
   font-size: 0.8rem; }
 .refresh:hover { background: #475569; }
+.dropdown-wrap { position: relative; display: inline-block; }
+.dropdown-menu { display: none; position: absolute; right: 0; top: 110%;
+  background: #1e293b; border: 1px solid #475569; border-radius: 8px;
+  min-width: 200px; z-index: 100; padding: 0.25rem 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.dropdown-menu.open { display: block; }
+.dropdown-menu button { display: block; width: 100%; text-align: left;
+  background: none; border: none; color: #e2e8f0; padding: 0.5rem 1rem;
+  font-size: 0.8rem; cursor: pointer; }
+.dropdown-menu button:hover { background: #334155; }
+.dropdown-menu button.danger { color: #fca5a5; }
+.dropdown-menu button.danger:hover { background: #450a0a; }
+.onboard { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid #334155; border-radius: 12px; padding: 2rem;
+  margin-bottom: 1.5rem; text-align: center; }
+.onboard h2 { font-size: 1.3rem; margin-bottom: 0.5rem; color: #e2e8f0; }
+.onboard p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.25rem; }
+.onboard-steps { display: flex; gap: 1.5rem; justify-content: center;
+  flex-wrap: wrap; margin-bottom: 1.25rem; }
+.onboard-step { background: #0f172a; border: 1px solid #334155;
+  border-radius: 10px; padding: 1rem 1.25rem; width: 220px; text-align: left; }
+.onboard-step .step-num { font-size: 0.65rem; color: #64748b;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.onboard-step code { font-size: 0.75rem; color: #93c5fd;
+  word-break: break-all; }
+.onboard-step .step-desc { font-size: 0.8rem; color: #94a3b8;
+  margin-top: 0.25rem; }
+.onboard-links { display: flex; gap: 1rem; justify-content: center; }
+.onboard-links a, .onboard-links button { color: #93c5fd; font-size: 0.85rem;
+  text-decoration: none; background: none; border: none; cursor: pointer; }
+.onboard-links a:hover, .onboard-links button:hover { text-decoration: underline; }
+.diag-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  z-index: 200; justify-content: center; align-items: center; }
+.diag-overlay.open { display: flex; }
+.diag-panel { background: #1e293b; border: 1px solid #334155;
+  border-radius: 12px; padding: 1.5rem; min-width: 400px; max-width: 520px; }
+.diag-panel h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+.diag-row { display: flex; justify-content: space-between; padding: 0.4rem 0;
+  border-bottom: 1px solid #334155; font-size: 0.85rem; }
+.diag-row .lbl { color: #94a3b8; }
+.diag-row .val { font-weight: 600; }
+.diag-ok { color: #4ade80; }
+.diag-warn { color: #fbbf24; }
+.diag-err { color: #fca5a5; }
+.diag-close { margin-top: 1rem; text-align: right; }
+.diag-close button { background: #334155; border: 1px solid #475569;
+  color: #e2e8f0; padding: 0.4rem 1rem; border-radius: 6px;
+  cursor: pointer; font-size: 0.8rem; }
 @media (max-width: 700px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: 1fr; }
+  .onboard-steps { flex-direction: column; align-items: center; }
 }
 </style></head><body>
 <header>
@@ -350,13 +472,57 @@ a.report-link:hover { text-decoration: underline; }
             <option value="2592000">Last 30 days</option>
             <option value="0">All time</option>
         </select>
+        <select id="classFilter" class="refresh" onchange="loadAll()"
+            style="appearance:auto;padding:0.25rem 0.4rem">
+            <option value="">All classifications</option>
+            <option value="verified">Verified</option>
+            <option value="embellished">Embellished</option>
+            <option value="fabricated">Fabricated</option>
+            <option value="skipped">Skipped</option>
+        </select>
+        <div class="dropdown-wrap">
+            <button class="refresh" onclick="togglePurge()">Clear Data</button>
+            <div id="purgeMenu" class="dropdown-menu">
+                <button onclick="doPurge('last_hour')">Clear last hour</button>
+                <button onclick="doPurge('today')">Clear today</button>
+                <button onclick="doPurge('older_than_7d')">Clear older than 7 days</button>
+                <button class="danger" onclick="doPurge('all')">Clear all data</button>
+            </div>
+        </div>
         <a href="/report" class="report-link">Full Report</a>
+        <button class="report-link" onclick="showDiagnostics()"
+            style="background:none;border:none;cursor:pointer;font-size:0.85rem">Diagnostics</button>
         <a href="/about" class="report-link">About</a>
         <button class="refresh" onclick="loadAll()">Refresh</button>
         <span id="status" class="status status-ok">connected</span>
     </div>
 </header>
 <main>
+    <div id="onboarding" class="onboard" style="display:none">
+        <h2>No detections yet</h2>
+        <p>ToolWitness is running but hasn't verified any tool calls. Follow these steps to get started:</p>
+        <div class="onboard-steps">
+            <div class="onboard-step">
+                <div class="step-num">Step 1</div>
+                <code>toolwitness proxy</code>
+                <div class="step-desc">Wrap your MCP server with the proxy in your Cursor MCP config</div>
+            </div>
+            <div class="onboard-step">
+                <div class="step-num">Step 2</div>
+                <code>toolwitness init --cursor-rule</code>
+                <div class="step-desc">Install the Cursor rule that triggers automatic verification</div>
+            </div>
+            <div class="onboard-step">
+                <div class="step-num">Step 3</div>
+                <code>Use a monitored tool</code>
+                <div class="step-desc">Ask your agent to use a tool through the proxied server</div>
+            </div>
+        </div>
+        <div class="onboard-links">
+            <a href="https://vcrosby22.github.io/toolwitness/getting-started/" target="_blank">Getting Started Guide</a>
+            <button onclick="showDiagnostics()">Run Diagnostics</button>
+        </div>
+    </div>
     <div class="kpis">
         <div class="kpi"><div class="kpi-val" id="kpi-total">—</div>
             <div class="kpi-lbl">Verifications</div></div>
@@ -389,6 +555,16 @@ a.report-link:hover { text-decoration: underline; }
         <h2>Tool Executions (Proxy)</h2>
         <div id="executions"></div>
     </div>
+<div id="diagOverlay" class="diag-overlay" onclick="if(event.target===this)closeDiag()">
+    <div class="diag-panel">
+        <h2>Diagnostics</h2>
+        <div id="diagContent">Loading...</div>
+        <div style="margin-top:0.75rem;font-size:0.8rem;color:#94a3b8">
+            For detailed diagnostics, run <code>toolwitness doctor</code> in your terminal.
+        </div>
+        <div class="diag-close"><button onclick="closeDiag()">Close</button></div>
+    </div>
+</div>
 </main>
 <script>
 const COLORS = {
@@ -407,20 +583,28 @@ function getSinceParam() {
     return '&since=' + (Date.now()/1000 - secs);
 }
 
+function getClassFilter() {
+    const val = document.getElementById('classFilter').value;
+    return val ? '&classification=' + val : '';
+}
+
 async function loadAll() {
     try {
         const sp = getSinceParam();
-        const [vData, sData, sessData, hoData, exData] = await Promise.all([
+        const cf = getClassFilter();
+        const [vDataAll, vDataFiltered, sData, sessData, hoData, exData] = await Promise.all([
             fetchJSON('/api/verifications?limit=200' + sp),
+            cf ? fetchJSON('/api/verifications?limit=200' + sp + cf) : null,
             fetchJSON('/api/stats' + sp.replace('&','?')),
             fetchJSON('/api/sessions' + sp.replace('&','?')),
             fetchJSON('/api/handoffs'),
             fetchJSON('/api/executions?limit=50' + sp),
         ]);
-        renderKPIs(vData.verifications);
-        renderBreakdown(vData.verifications);
+        renderKPIs(vDataAll.verifications);
+        renderBreakdown(vDataAll.verifications);
         renderSessions(sessData.sessions, hoData.handoffs);
-        renderRecent(vData.verifications);
+        const displayVerifs = vDataFiltered ? vDataFiltered.verifications : vDataAll.verifications;
+        renderRecent(displayVerifs);
         renderToolStats(sData.tools);
         renderExecutions(exData.executions);
         document.getElementById('status').className = 'status status-ok';
@@ -443,6 +627,7 @@ function renderKPIs(verifs) {
         rate < 0.05 ? '#16a34a' : rate < 0.15 ? '#ca8a04' : '#dc2626';
     document.getElementById('kpi-verified').textContent = counts.verified || 0;
     document.getElementById('kpi-failures').textContent = failures;
+    document.getElementById('onboarding').style.display = total === 0 ? 'block' : 'none';
 }
 
 function renderBreakdown(verifs) {
@@ -472,7 +657,7 @@ const SOURCE_BADGES = {
 
 const VERIFY_SOURCE_BADGES = {
     proxy:       {bg:'#052e16', color:'#4ade80', icon:'\u2705', label:'Proxy Verified'},
-    self_report: {bg:'#1e3a5f', color:'#60a5fa', icon:'\ud83d\udcdd', label:'Self-Reported'},
+    self_report: {bg:'#1e3a5f', color:'#60a5fa', icon:'\\ud83d\\udcdd', label:'Self-Reported'},
 };
 function verifySourceBadge(source) {
     const b = VERIFY_SOURCE_BADGES[source] || VERIFY_SOURCE_BADGES.proxy;
@@ -663,6 +848,98 @@ function renderExecutions(execs) {
     });
     html += '</tbody></table>';
     el.innerHTML = html;
+}
+
+function togglePurge() {
+    const menu = document.getElementById('purgeMenu');
+    menu.classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+    const wrap = document.querySelector('.dropdown-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('purgeMenu').classList.remove('open');
+    }
+});
+
+const PURGE_LABELS = {
+    last_hour: 'data from the last hour',
+    today: "today's data (since midnight)",
+    older_than_7d: 'data older than 7 days',
+    all: 'ALL data'
+};
+async function doPurge(mode) {
+    document.getElementById('purgeMenu').classList.remove('open');
+    if (!confirm('Clear ' + PURGE_LABELS[mode] + '? This cannot be undone.')) return;
+    try {
+        const body = { mode: mode };
+        if (mode === 'today') {
+            const d = new Date(); d.setHours(0,0,0,0);
+            body.midnight_ts = d.getTime() / 1000;
+        }
+        const r = await fetch('/api/purge', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (d.status === 'ok') {
+            const del = d.deleted || {};
+            alert('Cleared: ' + (del.sessions||0) + ' sessions, ' +
+                (del.verifications||0) + ' verifications, ' +
+                (del.executions||0) + ' executions.');
+            loadAll();
+        } else {
+            alert('Error: ' + (d.error || 'unknown'));
+        }
+    } catch(e) { alert('Failed: ' + e.message); }
+}
+
+async function showDiagnostics() {
+    const overlay = document.getElementById('diagOverlay');
+    const content = document.getElementById('diagContent');
+    overlay.classList.add('open');
+    content.innerHTML = 'Loading...';
+    try {
+        const d = await fetchJSON('/api/health');
+        let html = '';
+        const dbClass = d.status === 'ok' ? 'diag-ok' : 'diag-err';
+        html += '<div class="diag-row"><span class="lbl">Database</span>' +
+            '<span class="val ' + dbClass + '">' + d.status + '</span></div>';
+        html += '<div class="diag-row"><span class="lbl">Sessions</span>' +
+            '<span class="val">' + (d.total_sessions||0) + '</span></div>';
+        html += '<div class="diag-row"><span class="lbl">Executions</span>' +
+            '<span class="val">' + (d.total_executions||0) + '</span></div>';
+        html += '<div class="diag-row"><span class="lbl">Verifications</span>' +
+            '<span class="val">' + (d.total_verifications||0) + '</span></div>';
+        const ps = d.proxy_status || 'unknown';
+        const psClass = ps === 'alive' ? 'diag-ok' : ps === 'stale' ? 'diag-warn' : 'diag-err';
+        html += '<div class="diag-row"><span class="lbl">Proxy</span>' +
+            '<span class="val ' + psClass + '">' + ps + '</span></div>';
+        if (d.proxy_heartbeat_age_s !== undefined) {
+            html += '<div class="diag-row"><span class="lbl">Last heartbeat</span>' +
+                '<span class="val">' + d.proxy_heartbeat_age_s + 's ago</span></div>';
+        }
+        if (d.total_executions === 0) {
+            html += '<div style="margin-top:0.75rem;padding:0.5rem;background:#1c1917;' +
+                'border:1px solid #854d0e;border-radius:6px;font-size:0.8rem;color:#fbbf24">' +
+                'No proxy executions recorded. Make sure your MCP server is wrapped with ' +
+                '<code>toolwitness proxy</code> and Cursor has been reloaded.</div>';
+        }
+        if (d.total_executions > 0 && d.total_verifications === 0) {
+            html += '<div style="margin-top:0.75rem;padding:0.5rem;background:#1c1917;' +
+                'border:1px solid #854d0e;border-radius:6px;font-size:0.8rem;color:#fbbf24">' +
+                'Proxy is recording tool calls but no verifications yet. Make sure ' +
+                '<code>toolwitness serve</code> is in your MCP config and run ' +
+                '<code>toolwitness init --cursor-rule</code> to enable auto-verification.</div>';
+        }
+        content.innerHTML = html;
+    } catch(e) {
+        content.innerHTML = '<div class="diag-err">Failed to fetch diagnostics: ' +
+            e.message + '</div>';
+    }
+}
+function closeDiag() {
+    document.getElementById('diagOverlay').classList.remove('open');
 }
 
 loadAll();

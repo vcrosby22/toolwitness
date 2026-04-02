@@ -76,6 +76,14 @@ line-length = 99
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+# Explicit branches preferred over `a or b or c` when mixing `and`/`or` (precedence bugs).
+ignore = ["SIM114"]
+
+# Long fixture strings and sample agent text in tests; embedded HTML in dashboard
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+"src/toolwitness/dashboard/server.py" = ["E501"]
+"tests/test_false_positives.py" = ["E402"]
 
 [tool.coverage.run]
 source = ["toolwitness"]

@@ -3,7 +3,7 @@
 import json
 import time
 
-from toolwitness.alerting.channels import AlertPayload, CallbackChannel, LogChannel
+from toolwitness.alerting.channels import CallbackChannel, LogChannel
 from toolwitness.alerting.rules import AlertEngine, AlertRule, ThresholdRule
 from toolwitness.core.types import Classification, VerificationResult
 from toolwitness.reporting.digest import DigestReport, generate_digest
@@ -34,13 +34,13 @@ def _seed_verifications(
     """Insert verification rows directly for testing."""
     storage.save_session(session_id, {}, source="test")
     ts = time.time() - age_seconds
-    for i in range(n_verified):
+    for _i in range(n_verified):
         storage._conn.execute(
             "INSERT INTO verifications (session_id, tool_name, classification, confidence, evidence, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (session_id, "test_tool", "verified", 0.95, "{}", ts),
         )
-    for i in range(n_fabricated):
+    for _i in range(n_fabricated):
         storage._conn.execute(
             "INSERT INTO verifications (session_id, tool_name, classification, confidence, evidence, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
